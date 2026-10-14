@@ -59,7 +59,7 @@ export interface AuthDeps {
    * them on the session, before doing anything else that can fail, so the
    * session manager can persist them at once (a lost rotation is a lost login).
    */
-  onRefresh?: () => void;
+  onRefresh?: () => void | Promise<void>;
 }
 
 /** What a provider gets when building its API portal. */

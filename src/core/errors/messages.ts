@@ -81,6 +81,11 @@ export const MESSAGES = {
     en: (p) => `Not logged in to SchoolSoft (${p.reason}).`,
     sv: (p) => `Inte inloggad på SchoolSoft (${p.reason}).`,
   },
+  session_expired: {
+    en: () => "SchoolSoft session expired, needs a new BankID login by the guardian",
+    sv: () =>
+      "SchoolSoft-sessionen har gått ut och kräver en ny BankID-inloggning av vårdnadshavaren",
+  },
   session_rejected_twice: {
     en: () =>
       `SchoolSoft rejected the session even after a silent re-login; the saved session is no longer valid.`,

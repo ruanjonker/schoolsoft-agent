@@ -10,6 +10,8 @@ import { AgentError } from "../../../../core/errors/index.js";
 import { toGuardianParent } from "../domain/parent.js";
 import { toLunchDays } from "../domain/lunch.js";
 import { toMessages } from "../domain/inbox.js";
+import { toMessageDetail, type MessageDetail } from "../domain/message.js";
+import { toNewsItems, type NewsItem } from "../domain/news.js";
 
 export class EvaApi {
   constructor(
@@ -41,9 +43,11 @@ export class EvaApi {
     );
   }
 
-  getNews(userId: number, orgId: number, studentId: number): Promise<unknown[]> {
-    return this.bearer<unknown[]>(
-      `/eva/api/v2/parent/${userId}/schools/${orgId}/news?studentId=${studentId}&langId=1`,
+  async getNews(userId: number, orgId: number, studentId: number): Promise<NewsItem[]> {
+    return toNewsItems(
+      await this.bearer<unknown>(
+        `/eva/api/v2/parent/${userId}/schools/${orgId}/news?studentId=${studentId}&langId=1`,
+      ),
     );
   }
 
@@ -53,9 +57,11 @@ export class EvaApi {
     );
   }
 
-  getMessage(userId: number, orgId: number, messageId: number): Promise<unknown> {
-    return this.bearer<unknown>(
-      `/eva/api/v1/parent/${userId}/schools/${orgId}/messages/${messageId}`,
+  async getMessage(userId: number, orgId: number, messageId: number): Promise<MessageDetail> {
+    return toMessageDetail(
+      await this.bearer<unknown>(
+        `/eva/api/v1/parent/${userId}/schools/${orgId}/messages/${messageId}`,
+      ),
     );
   }
 

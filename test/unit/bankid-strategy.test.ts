@@ -257,7 +257,7 @@ test("edge cases: tokens without refresh/expiry, restore guards, no children, ch
       new SchoolsoftSession("taby", noRequests),
       saved({ data: { accessToken: "old", accessTokenExpiresAt: 1 } }) as never,
     ),
-    /no refresh token saved/,
+    /SchoolSoft session expired, needs a new BankID login by the guardian/,
   );
   // profile 500: not a 401, rethrown without refresh
   await assert.rejects(

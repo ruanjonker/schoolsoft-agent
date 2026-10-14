@@ -10,7 +10,7 @@ import type { PersistedSession, SessionStore } from "./store.js";
 import { childOf, type GuardianContext } from "../portal/guardian.js";
 import type { WebSession } from "../browser/web-login.js";
 import type { ProviderSession } from "../provider/types.js";
-import { AgentError, InputError, keepsSession } from "../errors/index.js";
+import { AgentError, InputError, SessionExpiredError, keepsSession } from "../errors/index.js";
 import {
   summarizeHistory,
   type SessionEvent,
@@ -60,6 +60,12 @@ export interface SessionManagerOptions<S extends ProviderSession> {
   history?: SessionHistoryRecorder;
   /** Told about logins, refreshes, child switches, web-session use and losses (history, cache). */
   onEvent?: SessionListener;
+  /**
+   * Holds a cross-process lock around restore and renew. Default runs `fn`
+   * immediately (tests, in-memory stores). The file store passes a lock so
+   * two runs cannot spend one rotating refresh token.
+   */
+  runLocked?: <T>(fn: () => Promise<T>) => Promise<T>;
 }
 
 export class SessionManager<S extends ProviderSession = ProviderSession> {
@@ -83,6 +89,7 @@ export class SessionManager<S extends ProviderSession = ProviderSession> {
   private readonly listeners: SessionListener[] = [];
   private readonly history?: SessionHistoryRecorder;
   private lock: Promise<unknown> = Promise.resolve();
+  private readonly runLocked: <T>(fn: () => Promise<T>) => Promise<T>;
 
   constructor(options: SessionManagerOptions<S>) {
     if (options.strategies.length === 0) {
@@ -102,6 +109,7 @@ export class SessionManager<S extends ProviderSession = ProviderSession> {
     this.isAlive = options.isAlive ?? (() => true);
     this.web = this.store.load()?.web ?? null;
     this.history = options.history;
+    this.runLocked = options.runLocked ?? ((fn) => fn());
     if (options.onEvent) this.listeners.push(options.onEvent);
   }
 
@@ -300,7 +308,7 @@ export class SessionManager<S extends ProviderSession = ProviderSession> {
     if (this.established) {
       return this.getSession();
     }
-    return this.exclusive(() => this.restoreSaved());
+    return this.runLocked(() => this.exclusive(() => this.restoreSaved()));
   }
 
   private async restoreSaved(): Promise<S> {
@@ -332,6 +340,7 @@ export class SessionManager<S extends ProviderSession = ProviderSession> {
       this.reset();
       if (keepsSession(e)) throw e; // the saved session may be fine; keep it
       this.loseAppSession();
+      if (e instanceof SessionExpiredError) throw e;
       throw new NotAuthenticatedError(`restore failed: ${e instanceof Error ? e.message : e}`);
     }
 
@@ -339,7 +348,7 @@ export class SessionManager<S extends ProviderSession = ProviderSession> {
     if (!alive) {
       this.reset();
       this.loseAppSession();
-      throw new NotAuthenticatedError("session expired");
+      throw new SessionExpiredError();
     }
 
     this.established = true;
@@ -367,34 +376,37 @@ export class SessionManager<S extends ProviderSession = ProviderSession> {
    * interaction and never a login. Works from the store, so tokens rotated
    * by another process are adopted rather than fought over. A transient
    * failure leaves everything as it was; a rejection means the session is
-   * gone, which is recorded and reported as NotAuthenticatedError.
+   * gone, which is recorded and reported as SessionExpiredError.
    */
   renew(leadMs = RENEW_LEAD_MS): Promise<{ expiresAt: number | null }> {
-    return this.exclusive(async () => {
-      const saved = this.store.load();
-      if (
-        !saved ||
-        saved.school !== this.school ||
-        (saved.provider !== undefined && saved.provider !== this.providerId)
-      ) {
-        throw new NotAuthenticatedError("no saved session");
-      }
-      const strategy = this.strategies.get(saved.authMethod) ?? this.defaultStrategy;
-      try {
-        return await strategy.renew(this.getSession(), saved, { now: this.now(), leadMs });
-      } catch (e) {
-        if (keepsSession(e)) throw e;
-        // Another process (a CLI command next to the MCP server) may have rotated the
-        // credentials while we tried: its tokens are the live ones. Keep them, try later.
-        const current = this.store.load();
-        if (current && JSON.stringify(current.data) !== JSON.stringify(saved.data)) {
-          return { expiresAt: null };
+    return this.runLocked(() =>
+      this.exclusive(async () => {
+        const saved = this.store.load();
+        if (
+          !saved ||
+          saved.school !== this.school ||
+          (saved.provider !== undefined && saved.provider !== this.providerId)
+        ) {
+          throw new NotAuthenticatedError("no saved session");
         }
-        this.reset();
-        this.loseAppSession();
-        throw new NotAuthenticatedError(`renewal failed: ${e instanceof Error ? e.message : e}`);
-      }
-    });
+        const strategy = this.strategies.get(saved.authMethod) ?? this.defaultStrategy;
+        try {
+          return await strategy.renew(this.getSession(), saved, { now: this.now(), leadMs });
+        } catch (e) {
+          if (keepsSession(e)) throw e;
+          // Another process (a CLI command next to the MCP server) may have rotated the
+          // credentials while we tried: its tokens are the live ones. Keep them, try later.
+          const current = this.store.load();
+          if (current && JSON.stringify(current.data) !== JSON.stringify(saved.data)) {
+            return { expiresAt: null };
+          }
+          this.reset();
+          this.loseAppSession();
+          if (e instanceof SessionExpiredError) throw e;
+          throw new NotAuthenticatedError(`renewal failed: ${e instanceof Error ? e.message : e}`);
+        }
+      }),
+    );
   }
 
   status(): { saved: PersistedSession | null; established: boolean } {

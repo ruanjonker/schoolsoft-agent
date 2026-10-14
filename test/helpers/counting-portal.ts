@@ -28,6 +28,7 @@ export function markedLesson(title: string): Lesson {
     group: null,
     teacher: null,
     note: null,
+    status: "scheduled",
   };
 }
 

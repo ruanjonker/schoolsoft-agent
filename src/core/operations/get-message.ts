@@ -11,7 +11,11 @@ Args:
   - id (number): Message id from get_messages.
   - child_id (number, optional): selects the school.
 
-Returns: { message: { id, subject, message, sender, date, recipients, attachments, ... } }.
+Returns: { message: { id, subject, sender, sentAt, body, read, attachments } }.
+
+This is a GET. The client never sends a separate "mark as read". If the portal
+marks a message read as a side effect of loading it, that has not been
+re-checked; use get_messages when the unread flag is enough.
 
 Use when: the user wants to read a specific message listed by get_messages.`,
   input: { id: z.number().int().describe("Message id from get_messages"), child_id: ChildSchema },

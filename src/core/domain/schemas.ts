@@ -44,6 +44,11 @@ export const LessonSchema = z.object({
   group: text("Teaching group"),
   teacher: text("Teacher"),
   note: text("Lesson description"),
+  status: z
+    .enum(["scheduled", "cancelled", "changed"])
+    .describe(
+      "scheduled unless the portal marked the lesson cancelled or changed. Absent fields are read as scheduled; the flag names are not re-checked live.",
+    ),
 });
 export type Lesson = z.infer<typeof LessonSchema>;
 

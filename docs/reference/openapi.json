@@ -236,6 +236,18 @@
             }
           },
           {
+            "name": "weeks",
+            "in": "query",
+            "required": false,
+            "description": "How many ISO weeks to return, starting at week. 1 is that week. 3 is that week and the next two (a daily check).",
+            "schema": {
+              "description": "How many ISO weeks to return, starting at week. 1 is that week. 3 is that week and the next two (a daily check).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3
+            }
+          },
+          {
             "name": "fresh",
             "in": "query",
             "required": false,
@@ -1037,7 +1049,12 @@
           "endDate": {
             "type": "string",
             "format": "date",
-            "description": "Sunday of the week, YYYY-MM-DD in Europe/Stockholm"
+            "description": "Sunday of the last week in the span, YYYY-MM-DD in Europe/Stockholm"
+          },
+          "spanWeeks": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3
           },
           "child": {
             "type": "object",
@@ -1106,6 +1123,15 @@
                     "string",
                     "null"
                   ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "scheduled",
+                    "cancelled",
+                    "changed"
+                  ],
+                  "description": "scheduled unless the portal marked the lesson cancelled or changed. Absent fields are read as scheduled; the flag names are not re-checked live."
                 }
               },
               "required": [
@@ -1116,7 +1142,8 @@
                 "room",
                 "group",
                 "teacher",
-                "note"
+                "note",
+                "status"
               ]
             }
           }
@@ -1126,6 +1153,7 @@
           "week",
           "startDate",
           "endDate",
+          "spanWeeks",
           "child",
           "lessons"
         ]
@@ -1467,7 +1495,12 @@
                       "endDate": {
                         "type": "string",
                         "format": "date",
-                        "description": "Sunday of the week, YYYY-MM-DD in Europe/Stockholm"
+                        "description": "Sunday of the last week in the span, YYYY-MM-DD in Europe/Stockholm"
+                      },
+                      "spanWeeks": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3
                       },
                       "child": {
                         "type": "object",
@@ -1536,6 +1569,15 @@
                                 "string",
                                 "null"
                               ]
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "scheduled",
+                                "cancelled",
+                                "changed"
+                              ],
+                              "description": "scheduled unless the portal marked the lesson cancelled or changed. Absent fields are read as scheduled; the flag names are not re-checked live."
                             }
                           },
                           "required": [
@@ -1546,7 +1588,8 @@
                             "room",
                             "group",
                             "teacher",
-                            "note"
+                            "note",
+                            "status"
                           ]
                         }
                       }
@@ -1556,6 +1599,7 @@
                       "week",
                       "startDate",
                       "endDate",
+                      "spanWeeks",
                       "child",
                       "lessons"
                     ]

@@ -7,6 +7,7 @@ import type { SubjectRoom } from "../../../../core/portal/types.js";
 import type { CalendarEvent, Lesson } from "../../../../core/domain/schemas.js";
 import { sortCalendar, toCalendarEvents } from "../domain/agenda.js";
 import { toLessons } from "../domain/lessons.js";
+import { toAssignments, type AssignmentItem } from "../domain/assignments.js";
 import type { SchoolsoftHttp } from "./transport.js";
 import { AgentError } from "../../../../core/errors/index.js";
 
@@ -50,9 +51,11 @@ export class WebviewApi {
     return toLessons(await this.cookie<unknown>(`/rest-api/parent/calendar/lessons/week/${week}`));
   }
 
-  getAssignmentsWeek(week: number, year: number): Promise<unknown[]> {
-    return this.cookie<unknown[]>(
-      `/rest-api/parent/ps/assignments/start-page?week=${week}&year=${year}`,
+  async getAssignmentsWeek(week: number, year: number): Promise<AssignmentItem[]> {
+    return toAssignments(
+      await this.cookie<unknown>(
+        `/rest-api/parent/ps/assignments/start-page?week=${week}&year=${year}`,
+      ),
     );
   }
 

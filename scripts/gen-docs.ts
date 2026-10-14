@@ -14,7 +14,7 @@ import { z } from "zod";
 import { operations } from "../src/core/index.js";
 import { flagsFromSchema, kebab } from "../src/cli/flags.js";
 import { textRenderer, TEXT_RENDERERS } from "../src/cli/text/registry.js";
-import { TOOL_PREFIX } from "../src/mcp/server.js";
+import { TOOL_PREFIX, mcpOperations } from "../src/mcp/server.js";
 import { restRoutes } from "../src/http/routes.js";
 import { PROBLEMS, PROBLEM_TYPE_PREFIX } from "../src/http/problem.js";
 import { REST_REQUESTS_PER_MINUTE } from "../src/http/rest.js";
@@ -123,12 +123,13 @@ export function renderOutput(op: (typeof operations)[number]): string {
 export function renderTools(): string {
   let md =
     HEADER +
-    "# MCP tools\n\nServer: `schoolsoft-agent-mcp` (stdio). Every tool returns JSON as `structuredContent` plus a text copy (truncated at 25 000 characters). Tools with an Output table declare it as their `outputSchema`; their results are validated and always carry `structuredContent`, and their errors are the two text lines only.\n\n";
+    "# MCP tools\n\nServer: `schoolsoft-agent-mcp` (stdio). Every tool returns JSON as `structuredContent` plus a text copy (truncated at 25 000 characters). Tools with an Output table declare it as their `outputSchema`; their results are validated and always carry `structuredContent`, and their errors are the two text lines only.\n\nSchool writes (reporting absence, sending messages, booking, signing) are not tools on this server. Login and logout only change the saved session on this computer.\n\n";
   md += "| Tool | Purpose | Annotations |\n|---|---|---|\n";
-  for (const op of operations)
+  const tools = mcpOperations(operations);
+  for (const op of tools)
     md += `| \`${TOOL_PREFIX}${op.name}\` | ${op.title} | ${annotationBadges(op)} |\n`;
   md += "\n";
-  for (const op of operations) {
+  for (const op of tools) {
     md += `## \`${TOOL_PREFIX}${op.name}\`\n\n${op.description.trim()}\n\n`;
     const specs = flagsFromSchema(op.input);
     if (specs.length) {

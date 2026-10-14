@@ -80,6 +80,42 @@ For the **parent-hosted connector**, start login on your server's owner page. Th
 
 Login problems are covered in [Troubleshooting](docs/getting-started/troubleshooting.md). Details and diagrams: [docs/development/architecture.md](docs/development/architecture.md). What SchoolSoft actually exposes: [docs/reference/schoolsoft-api.md](docs/reference/schoolsoft-api.md).
 
+## Persistent read-only access
+
+A background assistant can read a guardian's school data on a schedule without a new BankID approval each time, until the refresh token dies. This is unofficial access to SchoolSoft's own app API. SchoolSoft AB and the BankID operator are not involved, and their terms may not allow unattended use. Read those terms before relying on this.
+
+The stdio MCP server does not expose school writes (no absence reports, no sending messages, no bookings). `report-absence` remains a CLI command and stays off unless `SCHOOLSOFT_ALLOW_WRITES=1`. Login and logout only change the session stored on this computer.
+
+### Setup
+
+Prerequisite: Node.js 22 or newer. Use a placeholder slug such as `example` in docs and tests; your real tenant slug is the first path segment of the school portal URL (`https://sms.schoolsoft.se/<slug>/`). Several schools in one municipality usually share that slug. The school inside the tenant is chosen by child, not by a second slug. One guardian with children at two tenants is two slugs and two saved sessions in the same state directory.
+
+```bash
+npx -y schoolsoft-agent configure --query "your school name"
+npx -y schoolsoft-agent login
+npx -y schoolsoft-agent get-schedule --weeks 3
+npx -y schoolsoft-agent get-messages
+```
+
+`configure` looks up the tenant slug. `login` opens the real login page in your browser and prints the URL. You approve BankID yourself. Nothing in this project approves BankID for you. Tokens are stored encrypted (AES-256-GCM, key file mode `0600`) and are not printed. A failed refresh says `SESSION_EXPIRED` and `SchoolSoft session expired, needs a new BankID login by the guardian`, and it does not try the refresh token again.
+
+For a municipality whose login is SAML (Täby uses a host like `etjanst.taby.se`), the browser follows that hop and returns to the school portal, then to `http://127.0.0.1:43117/callback`. Portal cookies on the school host and its parent domain are kept. Cookies from the identity-provider host are not. That redirect chain was not re-run against a live login for this change.
+
+Access tokens last about 15 minutes. A later command or the MCP server refreshes them with the rotating refresh token, saves the new refresh token before it is used, and takes a file lock so two runs (a CLI command and the MCP server, or two schools) do not spend the same token. Pass `--weeks 3` on `get-schedule` for the current week and the next two. Each lesson has `status`: `scheduled`, `cancelled` or `changed`.
+
+Other reads, as JSON from the CLI or as MCP tools: assignments (date and submission status), calendar events, messages (subject, sender, date, body, unread — the inbox list does not load the body; opening one message is a GET and this client never sends a separate "mark as read"), news (title, date, body, attachment names when the portal sends them), unreported absence and the attendance report (web login, see below), grades.
+
+### Still missing or risky
+
+- **Refresh-token lifetime is unknown.** When it dies, the only fix is a new BankID login by the guardian. Do not script retries around `SESSION_EXPIRED`.
+- **BankID and SchoolSoft terms.** Unattended, token-based access may violate them even though the login itself is done by the person in their own browser.
+- **Täby SAML was not live-tested here.** Redirects, the Shibboleth cookie, and the return to the localhost callback are handled as far as the offline code can show. A real login is still required before trusting a Täby tenant.
+- **Cancelled and changed lessons.** The timetable is read from the recorded lessons endpoint. The flag is taken from field names seen in community clients (`cancelled`, `changed`, `status`, and similar). Those names were not re-checked against a live response. A missing flag is reported as `scheduled`.
+- **Assignments, news attachments, and the full message body** use the field names recorded for the app. News as recorded has a boolean "has attachment", not file names; names are included only when the JSON actually contains them. Whether opening one message marks it read on the server was not re-checked. The inbox list is the safe unread check.
+- **Attendance, lateness, and unreported absence** are the web pages behind SchoolSoft's "log in again" gate (`login --web`, once, BankID in the browser again). Lateness is whatever text that attendance table shows. There is no separate verified lateness field, and choosing another week would be a form post, which this client does not send. The unreported-absence page was only seen empty.
+- **Plannings** have a known path (`/rest-api/parent/ps/planning_parts/start-page`) whose JSON shape was never recorded, so it is not called. **Grades** are `get_grades` (and the grade-prognosis call), also behind the web login, and often empty until the school publishes them.
+- **Lunch** is already available and is not part of this read-only daily set.
+
 ## Privacy
 
 **[How your family's data is handled](docs/getting-started/data-handling.md)** explains, in plain language, what is stored, where, for how long, and what reaches your AI provider, SchoolSoft and your hosting provider. In short:

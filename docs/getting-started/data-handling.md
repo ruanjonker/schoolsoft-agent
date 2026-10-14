@@ -139,7 +139,7 @@ Each tool returns one kind of information. The assistant only fetches what it ne
 | Other families         | `get_contacts`                                                                             | The class contact list: classmates and, where the school publishes them, other guardians, with e-mail and phone.                                     |
 | Meetings and files     | `get_bookings`, `get_files`                                                                | Bookable meetings such as development talks. Names and links of files the school shares.                                                             |
 | Grades and documents   | `get_grades`, `get_grade_prognosis`, `get_student_documents`                               | Published grades, grade check dates, the list of student documents. These need `login --web`.                                                        |
-| Absence and attendance | `get_unreported_absence`, `get_attendance_report`, `report_absence`                        | Absence the school recorded, attendance summaries. `report_absence` returns the report it would send, or sent. The first two need `login --web`.     |
+| Absence and attendance | `get_unreported_absence`, `get_attendance_report`, CLI `report-absence`                   | Absence the school recorded, attendance summaries. `report-absence` is CLI-only and returns the report it would send, or sent. The first two need `login --web`. |
 | Finding a school       | `find_school`                                                                              | Names from SchoolSoft's public school list.                                                                                                          |
 
 Some of this is about other people: teachers, classmates, and other parents in contact lists, message recipients and comments. Ask only for what you need.
@@ -204,7 +204,7 @@ Error messages are shown to you and to the assistant, and are not logged. A few 
 
 ## Changing data at SchoolSoft
 
-Reporting an absence (`report_absence`) is the only tool that changes anything at SchoolSoft. It works only on a computer, never through the connector, and only after you turn it on with `SCHOOLSOFT_ALLOW_WRITES=1` (or `"allowWrites": true` in `config.json`). Even then, the first call only shows a preview and sends nothing. The assistant should show you the preview and send the report only after you say yes.
+Reporting an absence (`report-absence`) is the only command that changes anything at SchoolSoft. It is a CLI command, not an MCP tool, and it never runs through the connector. It works only after you turn it on with `SCHOOLSOFT_ALLOW_WRITES=1` (or `"allowWrites": true` in `config.json`). Even then, the first call only shows a preview and sends nothing. Run it yourself, and only after you have read the preview.
 
 Every other tool only reads, and the hidden browser blocks every request that could change something. Some requests still change your session, not your school data: logging in, renewing the login, and switching child. For grades and documents, the program also tells SchoolSoft's website which of your children you are looking at, as the website does when you switch child there.
 

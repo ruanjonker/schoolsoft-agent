@@ -367,7 +367,7 @@ test("app mode: network trouble backs off and keeps the session; a rejected refr
   assert.equal(w.store.load(), null);
   assert.deepEqual(w.keepalive!.status(), { app: "stopped" });
   assert.equal(w.timer.pending.size, 0, "nothing scheduled: it cannot loop against a dead session");
-  assert.deepEqual(w.logs, ["keepalive: app stopped (not_authenticated)"]);
+  assert.deepEqual(w.logs, ["keepalive: app stopped (session_expired)"]);
   const [loss] = w.history.read()!.losses;
   assert.deepEqual([loss.session, loss.activityCount], ["app", 1]);
   assert.ok(loss.idleMs >= 13 * MIN, "idle time counts from the last successful refresh");

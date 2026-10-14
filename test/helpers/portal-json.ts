@@ -39,6 +39,16 @@ export function marked(pathname: string, marker: string): unknown {
     }));
   if (pathname.endsWith("/messages/inbox"))
     return rawInbox().map((m) => ({ ...m, message: marker }));
+  if (/\/messages\/\d+$/.test(pathname))
+    return {
+      id: 99,
+      subject: "Note",
+      message: marker,
+      isRead: false,
+      sender: { firstName: "Ada", lastName: "Test" },
+      date: "2026-09-01T10:00",
+      attachments: [{ fileName: "note.pdf" }],
+    };
   return undefined;
 }
 

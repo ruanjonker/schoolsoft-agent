@@ -12,7 +12,7 @@ Responses are the operations' validated domain objects, unchanged, as `applicati
 |---|---|---|---|
 | `GET /api/v1/session` | (connection status) | any | none |
 | `GET /api/v1/children` | `list_children` | `list_children` | none |
-| `GET /api/v1/children/{childId}/schedule` | `get_schedule` | `get_schedule` | `week`, `fresh` |
+| `GET /api/v1/children/{childId}/schedule` | `get_schedule` | `get_schedule` | `week`, `weeks`, `fresh` |
 | `GET /api/v1/children/{childId}/calendar` | `get_calendar` | `get_calendar` | `start_date`, `end_date`, `fresh` |
 | `GET /api/v1/children/{childId}/lunch-menu` | `get_lunch_menu` | `get_lunch_menu` | `week`, `fresh` |
 | `GET /api/v1/children/{childId}/overview` | (composite) | any of `get_schedule`, `get_lunch_menu`, `get_calendar` | `date`, `fresh` |
@@ -61,6 +61,7 @@ Get schedule. Operation `get_schedule`, scope `get_schedule`. `{childId}` is an 
 | Query parameter | Type | Description |
 |---|---|---|
 | `week` | number | ISO week number 1–53. Defaults to the current week. |
+| `weeks` | number | How many ISO weeks to return, starting at week. 1 is that week. 3 is that week and the next two (a daily check). |
 | `fresh` | boolean | Skip the short-lived in-memory copy and read from SchoolSoft now. Use only when the user asks for the very latest. |
 
 Output (validated; an answer that does not fit is a `502` `response-drift`):
@@ -70,7 +71,8 @@ Output (validated; an answer that does not fit is a `502` `response-drift`):
 | `year` | integer | ISO week-year: the year in which this week starts nearest today |
 | `week` | integer |  |
 | `startDate` | string (date) | Monday of the week, YYYY-MM-DD in Europe/Stockholm |
-| `endDate` | string (date) | Sunday of the week, YYYY-MM-DD in Europe/Stockholm |
+| `endDate` | string (date) | Sunday of the last week in the span, YYYY-MM-DD in Europe/Stockholm |
+| `spanWeeks` | integer |  |
 | `child` | object | The child the result is for |
 | `child.id` | integer | Child id; pass it as child_id |
 | `child.firstName` | string |  |
@@ -83,6 +85,7 @@ Output (validated; an answer that does not fit is a `502` `response-drift`):
 | `lessons[].group` | string or null | Teaching group; null when not given |
 | `lessons[].teacher` | string or null | Teacher; null when not given |
 | `lessons[].note` | string or null | Lesson description; null when not given |
+| `lessons[].status` | `"scheduled"` \| `"cancelled"` \| `"changed"` | scheduled unless the portal marked the lesson cancelled or changed. Absent fields are read as scheduled; the flag names are not re-checked live. |
 
 ## `GET /api/v1/children/{childId}/calendar`
 

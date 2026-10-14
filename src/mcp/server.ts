@@ -4,9 +4,21 @@
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { operations, runOperation, type Lang, type OperationContext } from "../core/index.js";
+import type { Operation } from "../core/index.js";
 import { ok, fail } from "./respond.js";
 
 export const TOOL_PREFIX = "schoolsoft_";
+
+/**
+ * Tools the stdio server registers. School writes (absence reports and
+ * anything like them) stay out: this server is read-only apart from login
+ * and logout, which only change the saved session.
+ */
+export function mcpOperations(source: readonly Operation[] = operations): readonly Operation[] {
+  return source.filter(
+    (op) => op.annotations.readOnly || op.name === "login" || op.name === "logout",
+  );
+}
 
 export interface McpServerOptions {
   /** Resolves the operation context; may throw NotConfiguredError. */
@@ -18,7 +30,7 @@ export interface McpServerOptions {
 
 export function createMcpServer(options: McpServerOptions): McpServer {
   const server = new McpServer({ name: "schoolsoft-agent", version: options.version ?? "0.0.0" });
-  for (const op of operations) {
+  for (const op of mcpOperations(operations)) {
     server.registerTool(
       TOOL_PREFIX + op.name,
       {

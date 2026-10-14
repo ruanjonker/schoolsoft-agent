@@ -95,6 +95,7 @@ test("a section answered for another child fails the whole overview", async () =
               value: {
                 ...week,
                 child: { id: answeredFor, firstName: "Synthetic" },
+                spanWeeks: 1,
                 lessons: [],
               },
             },

@@ -12,7 +12,7 @@ import {
   decodeJwtClaims,
   type TokenFetch,
 } from "../../src/providers/schoolsoft/auth/oauth.js";
-import { UpstreamError } from "../../src/core/errors/index.js";
+import { SessionExpiredError, UpstreamError } from "../../src/core/errors/index.js";
 
 function jwt(payload: Record<string, unknown>): string {
   const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
@@ -119,10 +119,12 @@ test("exchangeCode surfaces SchoolSoft's userMessage on failure", async () => {
   );
 });
 
-test("refreshTokens uses the refresh grant with the same client id", async () => {
+test("refreshTokens uses the refresh grant with the same client id and does not follow redirects", async () => {
   let seen = "";
-  const fetchImpl: TokenFetch = async (url) => {
+  let redirect = "";
+  const fetchImpl: TokenFetch = async (url, _school, options) => {
     seen = url;
+    redirect = options.redirect;
     return {
       status: 200,
       data: { access_token: jwt({ exp: 5 }), refresh_token: "R2", expires: 10 },
@@ -135,7 +137,34 @@ test("refreshTokens uses the refresh grant with the same client id", async () =>
     fetchImpl,
   });
   assert.match(seen, /clientId=vApp&grantType=refresh_token&refreshToken=R1$/);
+  assert.equal(redirect, "manual");
   assert.equal(t.refreshToken, "R2");
+});
+
+test("a rejected or hollow refresh is SESSION_EXPIRED and is not described with the server body", async () => {
+  const fetchWith =
+    (status: number, data: unknown): TokenFetch =>
+    async () => ({ status, data });
+  const base = { school: "example", clientId: "vApp", refreshToken: "r" };
+  for (const [status, data] of [
+    [401, { userMessage: "refresh-token-secret" }],
+    [302, { userMessage: "https://etjanst.example.se/wa/auth" }],
+    [200, {}],
+  ] as const) {
+    await assert.rejects(
+      refreshTokens({ ...base, fetchImpl: fetchWith(status, data) }),
+      (e: unknown) => {
+        assert.ok(e instanceof SessionExpiredError);
+        assert.equal(e.code, "SESSION_EXPIRED");
+        assert.equal(
+          e.message,
+          "SchoolSoft session expired, needs a new BankID login by the guardian",
+        );
+        assert.equal(e.message.includes("refresh-token-secret"), false);
+        return true;
+      },
+    );
+  }
 });
 
 test("decodeJwtClaims returns only non-identifying claims", () => {

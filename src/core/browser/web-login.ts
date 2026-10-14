@@ -46,6 +46,18 @@ export interface WebLoginOptions {
   onOpen?: (url: string) => void;
 }
 
+/**
+ * True when a cookie's domain is the portal host or a parent of it
+ * (`.schoolsoft.se` covers `sms.schoolsoft.se`). Cookies set by a
+ * municipality identity provider on another host are not the portal session.
+ */
+export function cookieDomainCovers(cookieDomain: string, host: string): boolean {
+  const domain = cookieDomain.trim().replace(/^\./, "").toLowerCase();
+  const name = host.toLowerCase();
+  if (domain === "") return false;
+  return name === domain || name.endsWith(`.${domain}`);
+}
+
 export async function webLogin(o: WebLoginOptions): Promise<WebSession> {
   const origin = o.spec.origin;
   /* c8 ignore next: real playwright default, exercised by make login-web */
@@ -74,9 +86,7 @@ export async function webLogin(o: WebLoginOptions): Promise<WebSession> {
           .find((u) => o.spec.isPortalUrl(u, o.school)) ?? page.url();
       if (o.spec.isPortalUrl(url, o.school)) {
         const host = new URL(origin).hostname;
-        const cookies = (await context.cookies()).filter(
-          (c) => c.domain.replace(/^\./, "") === host,
-        );
+        const cookies = (await context.cookies()).filter((c) => cookieDomainCovers(c.domain, host));
         if (cookies.length > 0) {
           return {
             cookies: cookies.map((c) => ({

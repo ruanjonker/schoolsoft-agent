@@ -7,7 +7,12 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import type { SchoolsoftUserType } from "../../../core/constants.js";
-import { AgentError, UpstreamError, guardNetwork } from "../../../core/errors/index.js";
+import {
+  AgentError,
+  SessionExpiredError,
+  UpstreamError,
+  guardNetwork,
+} from "../../../core/errors/index.js";
 import type { FetchOptions } from "../net.js";
 import { portalUrl } from "../web-login.js";
 
@@ -64,9 +69,19 @@ export type TokenFetch = (
   userAgent: string,
 ) => Promise<{ status: number; data: unknown }>;
 
-function parseTokenResponse(status: number, data: unknown, what: string): TokenSet {
+function parseTokenResponse(
+  status: number,
+  data: unknown,
+  what: string,
+  refresh = false,
+): TokenSet {
   // A failing server is not a rejected login: keep the saved session and let the caller retry.
   if (status >= 500) throw new UpstreamError(status, what);
+  // A refresh that is not a token is the session being gone. Do not follow a
+  // redirect (it can leave SchoolSoft for the municipality login) and do not
+  // try again: the refresh token rotates, and a second use can revoke it.
+  // The server's body is not copied into the error; it can echo the token.
+  if (refresh && status !== 200) throw new SessionExpiredError();
   if (status !== 200) {
     const said =
       data && typeof data === "object" && "userMessage" in data
@@ -81,13 +96,15 @@ function parseTokenResponse(status: number, data: unknown, what: string): TokenS
   }
   const d = (data ?? {}) as Record<string, unknown>;
   const accessToken = typeof d.access_token === "string" ? d.access_token : "";
-  if (!accessToken)
+  if (!accessToken) {
+    if (refresh) throw new SessionExpiredError();
     throw new AgentError({
       kind: "not_authenticated",
       key: "token_exchange_failed",
       params: { what, detail: "no access_token in the response" },
       hint: "login",
     });
+  }
   const refreshToken = typeof d.refresh_token === "string" ? d.refresh_token : null;
   // SchoolSoft has been seen omitting `expires`; fall back to the JWT exp.
   const expiresIn = typeof d.expires === "number" ? d.expires : null;
@@ -147,12 +164,12 @@ export async function refreshTokens(options: {
         method: "POST",
         headers: { Accept: "application/json" },
         responseType: "json",
-        redirect: "follow",
+        redirect: "manual",
       },
       MOBILE_UA,
     ),
   );
-  return parseTokenResponse(r.status, r.data, "Token refresh");
+  return parseTokenResponse(r.status, r.data, "Token refresh", true);
 }
 
 export interface TokenClaims {

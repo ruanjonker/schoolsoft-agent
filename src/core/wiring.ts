@@ -14,6 +14,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Config } from "./config.js";
 import { accountKeyOf } from "./accounts.js";
+import { withSessionFileLock } from "./session/file-lock.js";
 import { RENEW_LEAD_MS, SessionManager } from "./session/session-manager.js";
 import { FileSessionStore } from "./session/file-store.js";
 import type { SessionStore } from "./session/store.js";
@@ -157,6 +158,25 @@ export function createSessionManager(config: Config, deps: SessionDeps = {}): Se
     pending: deps.pending ?? new FilePendingLoginStore(config.stateDir),
     pid: deps.pid,
     now,
+    runLocked: deps.store
+      ? (fn) => fn()
+      : (fn) =>
+          withSessionFileLock(
+            {
+              dir: config.stateDir,
+              pid: deps.pid ?? process.pid,
+              now,
+              isAlive: (pid) => {
+                try {
+                  process.kill(pid, 0);
+                  return true;
+                } catch {
+                  return false;
+                }
+              },
+            },
+            fn,
+          ),
     history: new SessionHistoryRecorder(
       deps.history ?? new FileSessionHistoryStore(config.stateDir, account),
       now,
