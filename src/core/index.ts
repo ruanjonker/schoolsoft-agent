@@ -147,6 +147,7 @@ export type {
 } from "./keepalive/scheduler.js";
 export {
   AgentError,
+  SessionExpiredError,
   NetworkError,
   UpstreamError,
   InputError,

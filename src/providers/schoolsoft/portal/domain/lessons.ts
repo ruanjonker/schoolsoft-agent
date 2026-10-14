@@ -17,8 +17,28 @@ const rawLessons = z.array(
     teachingGroup: optionalText,
     teacher: optionalText,
     description: optionalText,
+    // Names seen in community clients and the app, not re-checked live.
+    cancelled: z.boolean().optional(),
+    changed: z.boolean().optional(),
+    isCancelled: z.boolean().optional(),
+    isChanged: z.boolean().optional(),
+    status: z.string().nullish(),
   }),
 );
+
+function lessonStatus(l: {
+  cancelled?: boolean;
+  changed?: boolean;
+  isCancelled?: boolean;
+  isChanged?: boolean;
+  status?: string | null;
+}): "scheduled" | "cancelled" | "changed" {
+  const text = (l.status ?? "").toLowerCase();
+  if (l.cancelled === true || l.isCancelled === true || /cancel|inställd/.test(text))
+    return "cancelled";
+  if (l.changed === true || l.isChanged === true || /chang|ändr/.test(text)) return "changed";
+  return "scheduled";
+}
 
 export function toLessons(data: unknown): Lesson[] {
   return parseUpstream(rawLessons, data, "getScheduleWeek").map((l) => ({
@@ -31,5 +51,6 @@ export function toLessons(data: unknown): Lesson[] {
     group: l.teachingGroup,
     teacher: l.teacher,
     note: l.description,
+    status: lessonStatus(l),
   }));
 }

@@ -4,6 +4,8 @@
 
 Server: `schoolsoft-agent-mcp` (stdio). Every tool returns JSON as `structuredContent` plus a text copy (truncated at 25 000 characters). Tools with an Output table declare it as their `outputSchema`; their results are validated and always carry `structuredContent`, and their errors are the two text lines only.
 
+School writes (reporting absence, sending messages, booking, signing) are not tools on this server. Login and logout only change the saved session on this computer.
+
 | Tool | Purpose | Annotations |
 |---|---|---|
 | `schoolsoft_find_school` | Find school | read-only, idempotent, no login needed |
@@ -27,7 +29,6 @@ Server: `schoolsoft-agent-mcp` (stdio). Every tool returns JSON as `structuredCo
 | `schoolsoft_get_attendance_report` | Get attendance report | read-only, idempotent, needs login |
 | `schoolsoft_get_assessment_criteria` | Get assessment criteria | read-only, idempotent, needs login |
 | `schoolsoft_get_grade_prognosis` | Get grade prognosis dates | read-only, idempotent, needs login |
-| `schoolsoft_report_absence` | Report a child absent | writes, destructive, needs login |
 | `schoolsoft_login` | Log in to SchoolSoft | writes, no login needed |
 | `schoolsoft_auth_status` | Check SchoolSoft session status | read-only, idempotent, no login needed |
 | `schoolsoft_logout` | Log out of SchoolSoft | writes, destructive, idempotent, no login needed |
@@ -99,21 +100,25 @@ Example call:
 Get the lesson schedule (timetable) for one child for a given ISO week.
 
 Returns lessons with title, start/end (ISO date-time with the Stockholm offset),
-room, teaching group, teacher and note, and the week's year, Monday and Sunday.
+room, teaching group, teacher, note and status (scheduled, cancelled or changed),
+and the week's year, Monday and Sunday.
 
 Args:
   - week (number, optional): ISO week 1–53. Defaults to current week; the week
     nearest today is meant (week 2 asked in December is next January's).
+  - weeks (number, optional): 1–3 weeks from that week. Default 1. Pass 3 for
+    the current week and the next two.
   - child_id (number, optional): from list_children.
   - fresh (boolean, optional): read from SchoolSoft now instead of a recent in-memory copy.
 
-Returns: { year, week, startDate, endDate, child: { id, firstName }, lessons: [{ id, title, start, end, room, group, teacher, note }] }
+Returns: { year, week, startDate, endDate, spanWeeks, child: { id, firstName }, lessons: [{ id, title, start, end, room, group, teacher, note, status }] }
 
-Use when: "vad har barnet på schemat", "när slutar skolan på fredag".
+Use when: "vad har barnet på schemat", "när slutar skolan på fredag", "inställda lektioner de närmaste veckorna".
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `week` | number | no | ISO week number 1–53. Defaults to the current week. |
+| `weeks` | number | no | How many ISO weeks to return, starting at week. 1 is that week. 3 is that week and the next two (a daily check). |
 | `child_id` | number | no | Child's student id from list_children. Defaults to the child currently in focus. |
 | `fresh` | boolean | no | Skip the short-lived in-memory copy and read from SchoolSoft now. Use only when the user asks for the very latest. |
 
@@ -124,7 +129,8 @@ Output (validated; a response that does not fit is a `response_drift` error, exi
 | `year` | integer | ISO week-year: the year in which this week starts nearest today |
 | `week` | integer |  |
 | `startDate` | string (date) | Monday of the week, YYYY-MM-DD in Europe/Stockholm |
-| `endDate` | string (date) | Sunday of the week, YYYY-MM-DD in Europe/Stockholm |
+| `endDate` | string (date) | Sunday of the last week in the span, YYYY-MM-DD in Europe/Stockholm |
+| `spanWeeks` | integer |  |
 | `child` | object | The child the result is for |
 | `child.id` | integer | Child id; pass it as child_id |
 | `child.firstName` | string |  |
@@ -137,6 +143,7 @@ Output (validated; a response that does not fit is a `response_drift` error, exi
 | `lessons[].group` | string or null | Teaching group; null when not given |
 | `lessons[].teacher` | string or null | Teacher; null when not given |
 | `lessons[].note` | string or null | Lesson description; null when not given |
+| `lessons[].status` | `"scheduled"` \| `"cancelled"` \| `"changed"` | scheduled unless the portal marked the lesson cancelled or changed. Absent fields are read as scheduled; the flag names are not re-checked live. |
 
 Example call:
 
@@ -393,7 +400,11 @@ Args:
   - id (number): Message id from get_messages.
   - child_id (number, optional): selects the school.
 
-Returns: { message: { id, subject, message, sender, date, recipients, attachments, ... } }.
+Returns: { message: { id, subject, sender, sentAt, body, read, attachments } }.
+
+This is a GET. The client never sends a separate "mark as read". If the portal
+marks a message read as a side effect of loading it, that has not been
+re-checked; use get_messages when the unread flag is enough.
 
 Use when: the user wants to read a specific message listed by get_messages.
 
@@ -726,52 +737,6 @@ Example call:
 ```json
 {
   "name": "schoolsoft_get_grade_prognosis",
-  "arguments": {}
-}
-```
-
-## `schoolsoft_report_absence`
-
-Report a child absent (sjukanmälan / frånvaroanmälan). This CHANGES data at SchoolSoft.
-
-Two steps. Without confirm it sends nothing and returns a preview of exactly what
-would be reported. Show that preview to the user; call again with the same
-arguments and confirm: true only after they have said yes. It is not idempotent:
-never repeat a confirmed call on your own, also not after an error.
-
-Off by default: the user must set SCHOOLSOFT_ALLOW_WRITES=1 first.
-
-Args:
-  - child (optional): the child's first or full name. Or child_id from list_children.
-    Required when the guardian has more than one child.
-  - start_date, end_date (optional): inclusive YYYY-MM-DD in Europe/Stockholm, today or
-    later, at most 14 days. Default: today; end_date defaults to start_date.
-  - from_time, to_time (optional): HH:MM, both or neither, for part of a single day.
-  - reason (optional): a short comment for the school.
-  - confirm (optional): true sends the report.
-
-Returns: { status: "preview" | "reported", child, start_date, end_date, days, full_day,
-from_time?, to_time?, reason?, timezone, summary } and, when reported, response.
-
-Use when: "Report Ett sick today", "anmäl frånvaro för Ett imorgon",
-"sjukanmäl Två idag mellan 10 och 12".
-
-| Argument | Type | Required | Description |
-|---|---|---|---|
-| `child` | string | no | Child's first or full name. |
-| `child_id` | number | no | Child's student id from list_children, as an alternative to child. |
-| `start_date` | string | no | First day absent, YYYY-MM-DD (Europe/Stockholm). Default today. |
-| `end_date` | string | no | Last day absent, YYYY-MM-DD. Default start_date. At most 14 days. |
-| `from_time` | string | no | Part of a day: start HH:MM. Needs to_time. |
-| `to_time` | string | no | Part of a day: end HH:MM. Needs from_time. |
-| `reason` | string | no | Optional short comment for the school. |
-| `confirm` | boolean | no | true sends the report. Omitted: preview only, nothing is sent. |
-
-Example call:
-
-```json
-{
-  "name": "schoolsoft_report_absence",
   "arguments": {}
 }
 ```

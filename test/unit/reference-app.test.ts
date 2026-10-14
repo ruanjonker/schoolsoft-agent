@@ -52,6 +52,7 @@ const lesson = (over: Partial<Lesson> = {}): Lesson => ({
   teacher: "Ada",
   note: null,
   ...over,
+  status: over.status ?? "scheduled",
 });
 const event = (over: Partial<CalendarEvent> = {}): CalendarEvent => ({
   id: "e1",

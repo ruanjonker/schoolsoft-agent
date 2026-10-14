@@ -127,7 +127,14 @@ test("lessons: string ids, blank text becomes null, the result satisfies the dom
   assert.equal(first.id, "lesson:abc@2026-09-07T08:30:00+02:00");
   assert.equal(first.room, null);
   assert.equal(first.teacher, null);
+  assert.equal(first.status, "scheduled");
   assert.ok(LessonSchema.safeParse(first).success);
+  assert.equal(toLessons([{ ...rawLessonsWeek()[0], cancelled: true }])[0].status, "cancelled");
+  assert.equal(toLessons([{ ...rawLessonsWeek()[0], status: "inställd" }])[0].status, "cancelled");
+  assert.equal(toLessons([{ ...rawLessonsWeek()[0], isCancelled: true }])[0].status, "cancelled");
+  assert.equal(toLessons([{ ...rawLessonsWeek()[0], changed: true }])[0].status, "changed");
+  assert.equal(toLessons([{ ...rawLessonsWeek()[0], status: "changed" }])[0].status, "changed");
+  assert.equal(toLessons([{ ...rawLessonsWeek()[0], isChanged: true }])[0].status, "changed");
   assert.throws(
     () => toLessons([{ ...rawLessonsWeek()[0], eventId: "" }]),
     (e: unknown) => e instanceof ResponseDriftError && e.where === "getScheduleWeek",

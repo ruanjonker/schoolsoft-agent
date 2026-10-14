@@ -228,6 +228,7 @@ export function toExitCode(e: unknown, stderr: (s: string) => void, lang: Lang =
     return e.code;
   }
   const d = describeError(e, lang, "cli");
+  if (d.code) stderr(d.code);
   stderr(d.message);
   if (d.hint) stderr(`${lang === "sv" ? "Nästa steg" : "Next"}: ${d.hint}`);
   return d.exitCode as ExitCode;

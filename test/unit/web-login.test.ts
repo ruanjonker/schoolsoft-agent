@@ -5,7 +5,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { webLogin } from "../../src/core/browser/web-login.js";
+import { cookieDomainCovers, webLogin } from "../../src/core/browser/web-login.js";
 import { isPortalUrl, portalUrl, webLoginSpec } from "../../src/providers/schoolsoft/web-login.js";
 import type { PlaywrightLike } from "../../src/core/browser/playwright.js";
 import { SessionManager, MemorySessionStore } from "../../src/core/index.js";
@@ -50,6 +50,13 @@ function fakePw(
   return { pw, state };
 }
 
+test("cookie domains: the portal host and its parents count; the municipality login host does not", () => {
+  assert.equal(cookieDomainCovers("sms.schoolsoft.se", "sms.schoolsoft.se"), true);
+  assert.equal(cookieDomainCovers(".schoolsoft.se", "sms.schoolsoft.se"), true);
+  assert.equal(cookieDomainCovers("etjanst.taby.se", "sms.schoolsoft.se"), false);
+  assert.equal(cookieDomainCovers("  ", "sms.schoolsoft.se"), false);
+});
+
 test("isPortalUrl accepts parent pages and rejects login steps", () => {
   const o = "https://sms.schoolsoft.se";
   assert.ok(isPortalUrl(`${o}/taby/jsp/student/right_student_startpage.jsp`, "taby"));
@@ -70,6 +77,7 @@ test("webLogin opens the tenant root in a headed window, waits for the portal, k
     [
       { name: "JSESSIONID", value: "web", domain: "sms.schoolsoft.se", path: "/", expires: -1 },
       { name: "hash", value: "h", domain: ".sms.schoolsoft.se", path: "/", expires: 1_900_000_000 },
+      { name: "SSO", value: "s", domain: ".schoolsoft.se", path: "/", expires: -1 },
       { name: "_shib", value: "x", domain: "etjanst.taby.se", path: "/", expires: -1 },
     ],
   );
@@ -85,7 +93,7 @@ test("webLogin opens the tenant root in a headed window, waits for the portal, k
   assert.deepEqual(opened, ["https://sms.schoolsoft.se/taby/"]);
   assert.deepEqual(
     web.cookies.map((c) => c.name),
-    ["JSESSIONID", "hash"],
+    ["JSESSIONID", "hash", "SSO"],
   );
   assert.equal(
     web.landedOn,

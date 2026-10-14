@@ -29,6 +29,7 @@ const lesson = (id: string, title: string, start: string, end: string, room: str
   group: "4B",
   teacher: "Lärare Test",
   note: null,
+  status: "scheduled",
 });
 
 /** Domain lessons, as a provider returns them after mapping. */

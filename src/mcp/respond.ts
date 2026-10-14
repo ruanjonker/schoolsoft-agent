@@ -38,12 +38,19 @@ export function ok(data: Record<string, unknown>, typed = false): ToolResult {
  */
 export function fail(error: unknown, lang: Lang = "en", typed = false): ToolResult {
   const d = describeError(error, lang, "mcp");
-  const text = d.hint ? `Error: ${d.message}\nNext: ${d.hint}` : `Error: ${d.message}`;
+  const problem = d.code ? `${d.code}\n${d.message}` : d.message;
+  const text = d.hint ? `Error: ${problem}\nNext: ${d.hint}` : `Error: ${problem}`;
   if (typed) return { content: [{ type: "text", text }], isError: true };
   return {
     content: [{ type: "text", text }],
     structuredContent: {
-      error: { kind: d.kind, message: d.message, hint: d.hint, retryable: d.retryable },
+      error: {
+        ...(d.code ? { code: d.code } : {}),
+        kind: d.kind,
+        message: d.message,
+        hint: d.hint,
+        retryable: d.retryable,
+      },
     },
     isError: true,
   };

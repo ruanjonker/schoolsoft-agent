@@ -11,6 +11,10 @@ export function portalUrl(school: string, path: string): string {
   return `${SCHOOLSOFT_ORIGIN}/${school}${path}`;
 }
 
+// `etjanst.` covers a municipality SAML login such as Täby's etjanst.taby.se.
+// The browser follows that hop; a URL there is not the portal yet. The slug
+// in the SchoolSoft host is the tenant (one guardian, several schools share
+// it); the school inside the tenant is an org id, not a second slug.
 const LOGIN_MARKERS =
   /\/jsp\/Login\.jsp|\/samlLogin\.jsp|\/rest-api\/login\/|\/react\/#\/login|etjanst\.|\/wa\/auth\//;
 

@@ -5,6 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SessionManager, NotAuthenticatedError } from "../../src/core/session/session-manager.js";
+import { SessionExpiredError } from "../../src/core/errors/index.js";
 import { MemorySessionStore } from "../../src/core/session/store.js";
 import type { AuthStrategy, LoginInfo } from "../../src/core/auth/strategy.js";
 import type { PersistedSession } from "../../src/core/session/store.js";
@@ -127,7 +128,7 @@ test("dead session (verifySession false) throws and clears", async () => {
   });
   const client = fakeSession({ verify: async () => false });
   const { manager } = makeManager({ store, client });
-  await assert.rejects(() => manager.ensureSession(), NotAuthenticatedError);
+  await assert.rejects(() => manager.ensureSession(), SessionExpiredError);
   assert.equal(store.load(), null);
 });
 

@@ -99,21 +99,25 @@ schoolsoft-agent list-children
 Get the lesson schedule (timetable) for one child for a given ISO week.
 
 Returns lessons with title, start/end (ISO date-time with the Stockholm offset),
-room, teaching group, teacher and note, and the week's year, Monday and Sunday.
+room, teaching group, teacher, note and status (scheduled, cancelled or changed),
+and the week's year, Monday and Sunday.
 
 Args:
   - week (number, optional): ISO week 1–53. Defaults to current week; the week
     nearest today is meant (week 2 asked in December is next January's).
+  - weeks (number, optional): 1–3 weeks from that week. Default 1. Pass 3 for
+    the current week and the next two.
   - child_id (number, optional): from list_children.
   - fresh (boolean, optional): read from SchoolSoft now instead of a recent in-memory copy.
 
-Returns: { year, week, startDate, endDate, child: { id, firstName }, lessons: [{ id, title, start, end, room, group, teacher, note }] }
+Returns: { year, week, startDate, endDate, spanWeeks, child: { id, firstName }, lessons: [{ id, title, start, end, room, group, teacher, note, status }] }
 
-Use when: "vad har barnet på schemat", "när slutar skolan på fredag".
+Use when: "vad har barnet på schemat", "när slutar skolan på fredag", "inställda lektioner de närmaste veckorna".
 
 | Flag | Required | Description |
 |---|---|---|
 | `--week <number>` | no | ISO week number 1–53. Defaults to the current week. |
+| `--weeks <number>` | no | How many ISO weeks to return, starting at week. 1 is that week. 3 is that week and the next two (a daily check). |
 | `--child-id <number>` | no | Child's student id from list_children. Defaults to the child currently in focus. |
 | `--fresh` | no | Skip the short-lived in-memory copy and read from SchoolSoft now. Use only when the user asks for the very latest. |
 
@@ -124,7 +128,8 @@ Output (validated; a response that does not fit is a `response_drift` error, exi
 | `year` | integer | ISO week-year: the year in which this week starts nearest today |
 | `week` | integer |  |
 | `startDate` | string (date) | Monday of the week, YYYY-MM-DD in Europe/Stockholm |
-| `endDate` | string (date) | Sunday of the week, YYYY-MM-DD in Europe/Stockholm |
+| `endDate` | string (date) | Sunday of the last week in the span, YYYY-MM-DD in Europe/Stockholm |
+| `spanWeeks` | integer |  |
 | `child` | object | The child the result is for |
 | `child.id` | integer | Child id; pass it as child_id |
 | `child.firstName` | string |  |
@@ -137,6 +142,7 @@ Output (validated; a response that does not fit is a `response_drift` error, exi
 | `lessons[].group` | string or null | Teaching group; null when not given |
 | `lessons[].teacher` | string or null | Teacher; null when not given |
 | `lessons[].note` | string or null | Lesson description; null when not given |
+| `lessons[].status` | `"scheduled"` \| `"cancelled"` \| `"changed"` | scheduled unless the portal marked the lesson cancelled or changed. Absent fields are read as scheduled; the flag names are not re-checked live. |
 
 `--format text` prints a view of this result for people instead of JSON.
 
@@ -362,7 +368,11 @@ Args:
   - id (number): Message id from get_messages.
   - child_id (number, optional): selects the school.
 
-Returns: { message: { id, subject, message, sender, date, recipients, attachments, ... } }.
+Returns: { message: { id, subject, sender, sentAt, body, read, attachments } }.
+
+This is a GET. The client never sends a separate "mark as read". If the portal
+marks a message read as a side effect of loading it, that has not been
+re-checked; use get_messages when the unread flag is enough.
 
 Use when: the user wants to read a specific message listed by get_messages.
 

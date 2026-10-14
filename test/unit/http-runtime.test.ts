@@ -37,6 +37,7 @@ const lessonsFor = (cookie: string) => [
     group: null,
     teacher: null,
     note: null,
+    status: "scheduled" as const,
   },
 ];
 
@@ -292,11 +293,13 @@ test("concurrent reads keep focus and request atomic; logout waits for an active
   const [first, second] = await Promise.all([a, b]);
   assert.deepEqual(first, {
     ...weekOf(2),
+    spanWeeks: 1,
     child: { id: 101, firstName: "Child 101" },
     lessons: lessonsFor("JSESSIONID=101; hash=h; usertype=1"),
   });
   assert.deepEqual(second, {
     ...weekOf(3),
+    spanWeeks: 1,
     child: { id: 100, firstName: "Child 100" },
     lessons: lessonsFor("JSESSIONID=100; hash=h; usertype=1"),
   });
@@ -427,6 +430,7 @@ test("recovery revalidates the guardian and succeeds only for the original child
   const result = await f.runtime.execute("get_schedule", { child_id: 101, week: 2 }, [101]);
   assert.deepEqual(result, {
     ...weekOf(2),
+    spanWeeks: 1,
     child: { id: 101, firstName: "Child 101" },
     lessons: lessonsFor("JSESSIONID=101; hash=h; usertype=1"),
   });

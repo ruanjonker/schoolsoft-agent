@@ -215,6 +215,25 @@ export interface ErrorDescription {
   message: string;
   hint?: string;
   retryable: boolean;
+  /** Set for a dead refresh or a gone app session. The message stays the sentence below `session_expired`. */
+  code?: "SESSION_EXPIRED";
+}
+
+/**
+ * The saved app session cannot be renewed. One attempt already failed, or
+ * there is nothing left to refresh. Callers must not try the refresh token
+ * again: SchoolSoft rotates it, and a second use can revoke the grant.
+ */
+export class SessionExpiredError extends AgentError {
+  readonly code = "SESSION_EXPIRED" as const;
+  constructor() {
+    super({
+      kind: "not_authenticated",
+      key: "session_expired",
+      hint: "login",
+      retryable: false,
+    });
+  }
 }
 
 /** Render any thrown value for a surface, in a language. */
@@ -226,6 +245,7 @@ export function describeError(e: unknown, lang: Lang, surface: Surface): ErrorDe
       message: MESSAGES[e.key][lang](e.params),
       hint: e.hint ? HINTS[e.hint][lang][surface] : undefined,
       retryable: e.retryable,
+      ...(e instanceof SessionExpiredError ? { code: e.code } : {}),
     };
   }
   const detail = e instanceof Error ? e.message : String(e);

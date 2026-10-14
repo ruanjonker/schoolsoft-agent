@@ -7,8 +7,8 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createMcpServer, TOOL_PREFIX } from "../../src/mcp/server.js";
-import { operations, NotConfiguredError, type LoginInfo } from "../../src/core/index.js";
+import { createMcpServer, mcpOperations, TOOL_PREFIX } from "../../src/mcp/server.js";
+import { NotConfiguredError, type LoginInfo } from "../../src/core/index.js";
 import { makeContext, FAKE_LESSONS } from "../helpers/fakes.js";
 
 let client: Client;
@@ -32,7 +32,9 @@ test("tools/list exposes one prefixed tool per operation with mirrored annotatio
   const { tools } = await client.listTools();
   assert.deepEqual(
     tools.map((t) => t.name).sort(),
-    operations.map((o) => TOOL_PREFIX + o.name).sort(),
+    mcpOperations()
+      .map((o) => TOOL_PREFIX + o.name)
+      .sort(),
   );
   const sched = tools.find((t) => t.name === "schoolsoft_get_schedule")!;
   assert.equal(sched.annotations?.readOnlyHint, true);

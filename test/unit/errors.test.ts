@@ -6,6 +6,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { toExitCode } from "../../src/cli/program.js";
+import { fail } from "../../src/mcp/respond.js";
 import {
   AgentError,
   NetworkError,
@@ -16,6 +18,7 @@ import {
   detectLang,
   guardNetwork,
   ResponseDriftError,
+  SessionExpiredError,
   describeIssues,
   isTransient,
   keepsSession,
@@ -284,4 +287,31 @@ test("keepsSession: transient failures and drift keep a saved session; rejection
   assert.equal(keepsSession(new UpstreamError(503, "x")), true);
   assert.equal(keepsSession(new UpstreamError(401, "x")), false);
   assert.equal(keepsSession(new Error("bug")), false);
+  assert.equal(keepsSession(new SessionExpiredError()), false);
+});
+
+test("SESSION_EXPIRED names the code and the fixed sentence, and does not retry", () => {
+  const e = new SessionExpiredError();
+  const en = describeError(e, "en", "cli");
+  assert.equal(en.code, "SESSION_EXPIRED");
+  assert.equal(en.exitCode, 2);
+  assert.equal(en.retryable, false);
+  assert.equal(en.message, "SchoolSoft session expired, needs a new BankID login by the guardian");
+  assert.match(describeError(e, "sv", "mcp").message, /BankID/);
+  const lines: string[] = [];
+  assert.equal(
+    toExitCode(e, (line) => lines.push(line), "en"),
+    2,
+  );
+  assert.deepEqual(lines[0], "SESSION_EXPIRED");
+  assert.equal(lines[1], en.message);
+  const tool = fail(e, "en", false);
+  assert.equal(
+    (tool.structuredContent as { error: { code: string; message: string } }).error.code,
+    "SESSION_EXPIRED",
+  );
+  assert.match(tool.content[0].text, /^Error: SESSION_EXPIRED\n/);
+  const typed = fail(e, "en", true);
+  assert.equal(typed.structuredContent, undefined);
+  assert.match(typed.content[0].text, /SESSION_EXPIRED/);
 });

@@ -19,6 +19,7 @@ const SCHEDULE = {
   week: 39,
   startDate: "2026-09-21",
   endDate: "2026-09-27",
+  spanWeeks: 1,
   child: { id: 7, firstName: "Alva" },
   lessons: [
     {
@@ -30,6 +31,7 @@ const SCHEDULE = {
       group: null,
       teacher: null,
       note: null,
+      status: "scheduled",
     },
   ],
 };

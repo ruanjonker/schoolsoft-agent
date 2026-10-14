@@ -30,7 +30,7 @@ import { isoWeekDate } from "../../src/core/domain/time.js";
 import { lunchYear } from "../../src/core/operations/get-lunch-menu.js";
 import { weekOf } from "../../src/core/operations/_week.js";
 import { schoolsoftProvider } from "../../src/providers/schoolsoft/index.js";
-import { createMcpServer } from "../../src/mcp/server.js";
+import { createMcpServer, mcpOperations } from "../../src/mcp/server.js";
 import { runCli } from "../../src/cli/program.js";
 import { EXIT } from "../../src/cli/exit-codes.js";
 import { SchoolsoftSim, savedSession } from "../helpers/schoolsoft-sim.js";
@@ -114,11 +114,16 @@ test("MCP publishes an outputSchema for exactly the five typed operations", asyn
     "child",
     "endDate",
     "lessons",
+    "spanWeeks",
     "startDate",
     "week",
     "year",
   ]);
-  assert.equal(tools.length, 25);
+  assert.equal(tools.length, mcpOperations().length);
+  assert.equal(
+    tools.some((tool) => tool.name === "schoolsoft_report_absence"),
+    false,
+  );
   assert.deepEqual(
     operations.filter((op) => op.output).map((op) => op.name),
     TYPED,
@@ -139,6 +144,7 @@ test("the five operations map live-shaped JSON to the domain model", async () =>
   const child = { id: 100, firstName: "Ett" };
   assert.deepEqual(await run(ctx, "get_schedule"), {
     ...weekOf(37),
+    spanWeeks: 1,
     child,
     lessons: [
       {
@@ -150,6 +156,7 @@ test("the five operations map live-shaped JSON to the domain model", async () =>
         group: "4B",
         teacher: "Lärare Test",
         note: "Kapitel 3",
+        status: "scheduled",
       },
       {
         id: "lesson:5002@2026-09-07T10:10:00+02:00",
@@ -160,6 +167,7 @@ test("the five operations map live-shaped JSON to the domain model", async () =>
         group: "4B",
         teacher: "Lärare Test",
         note: null,
+        status: "scheduled",
       },
     ],
   });

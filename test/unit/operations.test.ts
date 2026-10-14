@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { getOperation, NotAuthenticatedError, type Operation } from "../../src/core/index.js";
-import { makeContext } from "../helpers/fakes.js";
+import { FAKE_LESSONS, makeContext } from "../helpers/fakes.js";
 import { isoWeekDate } from "../../src/core/domain/time.js";
 
 const op = (name: string) => getOperation(name) as Operation;
@@ -31,6 +31,26 @@ test("login → schedule defaults to the child in focus", async () => {
   assert.equal(s.week, 35);
   assert.deepEqual(s.child, { id: 100, firstName: "Ett" });
   assert.equal(s.lessons[0].title, "Matematik");
+});
+
+test("get_schedule can cover this week and the next two", async () => {
+  const seen: number[] = [];
+  const { ctx } = makeContext();
+  await run("login", ctx);
+  ctx.portal = {
+    ...ctx.portal,
+    getScheduleWeek: async (week: number) => {
+      seen.push(week);
+      return FAKE_LESSONS;
+    },
+  };
+  const one = await run("get_schedule", ctx, { weeks: 1 });
+  assert.equal(one.spanWeeks, 1);
+  const three = await run("get_schedule", ctx, { weeks: 3 });
+  assert.equal(three.spanWeeks, 3);
+  assert.equal(seen.length, 4);
+  assert.equal(three.lessons.length, FAKE_LESSONS.length * 3);
+  assert.ok(three.endDate > three.startDate);
 });
 
 test("child_id switches focus, list_children reflects it, unknown ids are rejected before any side effect", async () => {

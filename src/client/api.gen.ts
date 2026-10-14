@@ -67,8 +67,9 @@ export type Schedule = {
   week: number;
   /** Monday of the week, YYYY-MM-DD in Europe/Stockholm */
   startDate: string;
-  /** Sunday of the week, YYYY-MM-DD in Europe/Stockholm */
+  /** Sunday of the last week in the span, YYYY-MM-DD in Europe/Stockholm */
   endDate: string;
+  spanWeeks: number;
   /** The child the result is for */
   child: {
     /** Child id; pass it as child_id */
@@ -92,6 +93,8 @@ export type Schedule = {
     teacher: string | null;
     /** Lesson description; null when not given */
     note: string | null;
+    /** scheduled unless the portal marked the lesson cancelled or changed. Absent fields are read as scheduled; the flag names are not re-checked live. */
+    status: "scheduled" | "cancelled" | "changed";
   }>;
 };
 
@@ -187,8 +190,9 @@ export type Overview = {
       week: number;
       /** Monday of the week, YYYY-MM-DD in Europe/Stockholm */
       startDate: string;
-      /** Sunday of the week, YYYY-MM-DD in Europe/Stockholm */
+      /** Sunday of the last week in the span, YYYY-MM-DD in Europe/Stockholm */
       endDate: string;
+      spanWeeks: number;
       /** The child the result is for */
       child: {
         /** Child id; pass it as child_id */
@@ -212,6 +216,8 @@ export type Overview = {
         teacher: string | null;
         /** Lesson description; null when not given */
         note: string | null;
+        /** scheduled unless the portal marked the lesson cancelled or changed. Absent fields are read as scheduled; the flag names are not re-checked live. */
+        status: "scheduled" | "cancelled" | "changed";
       }>;
     };
   }) | ({
@@ -393,6 +399,8 @@ export type ListChildrenQuery = Record<string, unknown>;
 export type GetScheduleQuery = {
   /** ISO week number 1–53. Defaults to the current week. */
   week?: number;
+  /** How many ISO weeks to return, starting at week. 1 is that week. 3 is that week and the next two (a daily check). */
+  weeks?: number;
   /** Skip the short-lived in-memory copy and read from SchoolSoft now. Use only when the user asks for the very latest. */
   fresh?: boolean;
 };
@@ -444,7 +452,7 @@ export interface Route {
 export const ROUTES: { readonly [K in keyof Operations]: Route & { childScoped: Operations[K]["childScoped"] } } = {
   getSession: { path: "/session", schema: "Session", childScoped: false, query: [] },
   listChildren: { path: "/children", schema: "Children", childScoped: false, query: [] },
-  getSchedule: { path: "/children/{childId}/schedule", schema: "Schedule", childScoped: true, query: ["week","fresh"] },
+  getSchedule: { path: "/children/{childId}/schedule", schema: "Schedule", childScoped: true, query: ["week","weeks","fresh"] },
   getCalendar: { path: "/children/{childId}/calendar", schema: "Calendar", childScoped: true, query: ["start_date","end_date","fresh"] },
   getLunchMenu: { path: "/children/{childId}/lunch-menu", schema: "LunchMenu", childScoped: true, query: ["week","fresh"] },
   getOverview: { path: "/children/{childId}/overview", schema: "Overview", childScoped: true, query: ["date","fresh"] },
@@ -639,7 +647,12 @@ export const SCHEMAS: Record<SchemaName, Record<string, unknown>> = {
       "endDate": {
         "type": "string",
         "format": "date",
-        "description": "Sunday of the week, YYYY-MM-DD in Europe/Stockholm"
+        "description": "Sunday of the last week in the span, YYYY-MM-DD in Europe/Stockholm"
+      },
+      "spanWeeks": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 3
       },
       "child": {
         "type": "object",
@@ -708,6 +721,15 @@ export const SCHEMAS: Record<SchemaName, Record<string, unknown>> = {
                 "string",
                 "null"
               ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "scheduled",
+                "cancelled",
+                "changed"
+              ],
+              "description": "scheduled unless the portal marked the lesson cancelled or changed. Absent fields are read as scheduled; the flag names are not re-checked live."
             }
           },
           "required": [
@@ -718,7 +740,8 @@ export const SCHEMAS: Record<SchemaName, Record<string, unknown>> = {
             "room",
             "group",
             "teacher",
-            "note"
+            "note",
+            "status"
           ]
         }
       }
@@ -728,6 +751,7 @@ export const SCHEMAS: Record<SchemaName, Record<string, unknown>> = {
       "week",
       "startDate",
       "endDate",
+      "spanWeeks",
       "child",
       "lessons"
     ]
@@ -1069,7 +1093,12 @@ export const SCHEMAS: Record<SchemaName, Record<string, unknown>> = {
                   "endDate": {
                     "type": "string",
                     "format": "date",
-                    "description": "Sunday of the week, YYYY-MM-DD in Europe/Stockholm"
+                    "description": "Sunday of the last week in the span, YYYY-MM-DD in Europe/Stockholm"
+                  },
+                  "spanWeeks": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3
                   },
                   "child": {
                     "type": "object",
@@ -1138,6 +1167,15 @@ export const SCHEMAS: Record<SchemaName, Record<string, unknown>> = {
                             "string",
                             "null"
                           ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "scheduled",
+                            "cancelled",
+                            "changed"
+                          ],
+                          "description": "scheduled unless the portal marked the lesson cancelled or changed. Absent fields are read as scheduled; the flag names are not re-checked live."
                         }
                       },
                       "required": [
@@ -1148,7 +1186,8 @@ export const SCHEMAS: Record<SchemaName, Record<string, unknown>> = {
                         "room",
                         "group",
                         "teacher",
-                        "note"
+                        "note",
+                        "status"
                       ]
                     }
                   }
@@ -1158,6 +1197,7 @@ export const SCHEMAS: Record<SchemaName, Record<string, unknown>> = {
                   "week",
                   "startDate",
                   "endDate",
+                  "spanWeeks",
                   "child",
                   "lessons"
                 ]

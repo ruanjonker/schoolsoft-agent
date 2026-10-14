@@ -10,7 +10,17 @@ const lesson = (
   end: string,
   room: string | null,
   id = `lesson:${title}@${start}`,
-): Lesson => ({ id, title, start, end, room, group: "4B", teacher: "Lärare Test", note: null });
+): Lesson => ({
+  id,
+  title,
+  start,
+  end,
+  room,
+  group: "4B",
+  teacher: "Lärare Test",
+  note: null,
+  status: "scheduled",
+});
 
 export const CHILDREN: { guardianName: string; children: Child[]; childInFocus: number } = {
   guardianName: "Test Testsson",

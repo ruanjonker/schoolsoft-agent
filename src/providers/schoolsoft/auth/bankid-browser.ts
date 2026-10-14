@@ -26,7 +26,7 @@ import { exchangeTokenForCookies, type ExchangeFetch } from "./session-exchange.
 import { exchangeCode, refreshTokens, decodeJwtClaims, type TokenFetch } from "./oauth.js";
 import { GuardianApi, type ApiFetch } from "../portal/api-portal.js";
 import { childOf, orgIdOf, type GuardianContext } from "../../../core/portal/guardian.js";
-import { AgentError, UpstreamError } from "../../../core/errors/index.js";
+import { AgentError, SessionExpiredError, UpstreamError } from "../../../core/errors/index.js";
 
 export interface BankIdBrowserOptions {
   orgid?: string;
@@ -38,8 +38,12 @@ export interface BankIdBrowserOptions {
   openBrowser?: (url: string) => void;
   browserAuthorization?: BrowserAuthorization;
   redirectUri?: string;
-  /** Told about every rotated token pair at once, so it can be persisted before anything else fails. */
-  onRefresh?: () => void;
+  /**
+   * Told about every rotated token pair at once, so it can be persisted
+   * before the new access token is used. May return a promise; refresh waits
+   * for it. A lost rotation is a lost login.
+   */
+  onRefresh?: () => void | Promise<void>;
 }
 
 export class BankIdBrowserStrategy implements AuthStrategy<SchoolsoftSession> {
@@ -121,26 +125,21 @@ export class BankIdBrowserStrategy implements AuthStrategy<SchoolsoftSession> {
 
   /** Refresh and adopt the rotated pair; resolves with the new expiry (unix seconds), null when unknown. */
   private async refresh(tokens: SessionTokens): Promise<number | null> {
-    if (!tokens.refreshToken) {
-      throw new AgentError({
-        kind: "not_authenticated",
-        key: "not_authenticated",
-        params: { reason: "access token expired and no refresh token saved" },
-        hint: "login",
-      });
-    }
+    if (!tokens.refreshToken) throw new SessionExpiredError();
     const t = await refreshTokens({
       school: tokens.school,
       clientId: this.clientId,
       refreshToken: tokens.refreshToken,
       fetchImpl: this.options.fetchImpl,
     });
+    // Adopt the pair, then persist it, before any later request uses it.
+    // The old refresh token is already spent upstream.
     tokens.setAccessToken(
       t.accessToken,
       t.refreshToken ?? tokens.refreshToken,
       t.expiresAt ?? undefined,
     );
-    this.options.onRefresh?.();
+    await this.options.onRefresh?.();
     return t.expiresAt;
   }
 

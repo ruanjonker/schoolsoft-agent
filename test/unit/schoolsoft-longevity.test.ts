@@ -29,7 +29,9 @@ function strategy(sim: SchoolsoftSim) {
   const session = new SchoolsoftSession("taby", noRequests);
   const s = new BankIdBrowserStrategy({
     fetchImpl: sim.fetch,
-    onRefresh: () => rotations.push(String(session.tokens.refreshToken)),
+    onRefresh: () => {
+      rotations.push(String(session.tokens.refreshToken));
+    },
   });
   return { s, session, rotations };
 }
@@ -97,7 +99,7 @@ test("renew: unknown expiry refreshes; an opaque new token has no known expiry; 
       { ...savedSession(T0), data: { accessToken: jwt(1) } },
       { now: T0, leadMs: LEAD },
     ),
-    /no refresh token saved/,
+    /SchoolSoft session expired, needs a new BankID login by the guardian/,
   );
   assert.equal(sim.requests.length, before);
 });
@@ -106,7 +108,18 @@ test("renew: a rejected refresh is a login problem; a failing server is retryabl
   const sim = new SchoolsoftSim(() => T0);
   const { s, session, rotations } = strategy(sim);
   sim.refreshStatus = 400;
-  await assert.rejects(s.renew(session, savedSession(T0, 1), { now: T0, leadMs: LEAD }), /nej/);
+  await assert.rejects(
+    s.renew(session, savedSession(T0, 1), { now: T0, leadMs: LEAD }),
+    (e: unknown) => {
+      assert.equal((e as { code?: string }).code, "SESSION_EXPIRED");
+      assert.equal(
+        (e as Error).message,
+        "SchoolSoft session expired, needs a new BankID login by the guardian",
+      );
+      return true;
+    },
+  );
+  assert.equal(sim.requests.length, 1, "a rejected refresh is not tried again");
   sim.refreshStatus = 503;
   await assert.rejects(
     s.renew(session, savedSession(T0, 1), { now: T0, leadMs: LEAD }),
