@@ -184,7 +184,12 @@ export type {
   BrowserPortalContext,
   WebLoginSpec,
 } from "./provider/types.js";
-export { SessionManager, NotAuthenticatedError, RENEW_LEAD_MS } from "./session/session-manager.js";
+export {
+  SessionManager,
+  NotAuthenticatedError,
+  RENEW_LEAD_MS,
+  WEB_SESSION_METHOD,
+} from "./session/session-manager.js";
 export type {
   DocumentRepository,
   PersistedSession,

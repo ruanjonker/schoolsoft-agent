@@ -70,9 +70,17 @@ export async function webLogin(o: WebLoginOptions): Promise<WebSession> {
     engine.kind === "cdp"
       ? await pw.chromium.connectOverCDP(engine.endpoint)
       : await pw.chromium.launch({ headless: false });
+  const cdp = engine.kind === "cdp";
+  let opened: { close(): Promise<void> } | null = null;
   try {
-    const context = await browser.newContext({ locale: "sv-SE" });
+    // Over CDP, reuse the real browser's own profile: SchoolSoft's BankID
+    // flow does not complete in a fresh incognito-style context.
+    const context =
+      cdp && browser.contexts().length > 0
+        ? browser.contexts()[0]!
+        : await browser.newContext({ locale: "sv-SE" });
     const page = await context.newPage();
+    opened = page;
     const loginUrl = o.spec.loginUrl(o.school);
     o.onOpen?.(loginUrl);
     await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
@@ -112,6 +120,30 @@ export async function webLogin(o: WebLoginOptions): Promise<WebSession> {
       hint: "login_web",
     });
   } finally {
-    await browser.close().catch(() => {});
+    if (cdp) {
+      // The user's own browser: close only the tab we opened, then disconnect.
+      // Never wait on the disconnect for long; a stuck CDP socket must not
+      // hold the process after the result is known.
+      await settle(opened?.close(), CDP_RELEASE_MS);
+      await settle(browser.close(), CDP_RELEASE_MS);
+    } else {
+      await browser.close().catch(() => {});
+    }
   }
+}
+
+/** How long to wait for the CDP tab close and disconnect before moving on. */
+export const CDP_RELEASE_MS = 3000;
+
+/** Wait for `p` at most `ms`; errors and timeouts are both ignored. */
+async function settle(p: Promise<unknown> | undefined, ms: number): Promise<void> {
+  if (!p) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    p.catch(() => {}),
+    new Promise<void>((r) => {
+      timer = setTimeout(r, ms);
+    }),
+  ]);
+  clearTimeout(timer);
 }

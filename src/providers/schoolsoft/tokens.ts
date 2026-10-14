@@ -46,6 +46,11 @@ export class SessionTokens {
     if (expiresAt !== undefined) this.expiry = expiresAt;
   }
 
+  /** Adopt a whole cookie header as is (the web-login session's portal cookies). */
+  setCookieHeader(header: string): void {
+    this.cookies = header;
+  }
+
   /** Adopt the webview cookies the cookie exchange returned. */
   setSessionCookies(jsessionid: string, hash: string, usertype = "1"): void {
     this.cookies = `JSESSIONID=${jsessionid}; hash=${hash}; usertype=${usertype}`;

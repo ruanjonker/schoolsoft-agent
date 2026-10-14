@@ -22,6 +22,7 @@ function fakePw(
       state.gotos.push(u);
     },
     url: () => urls[Math.min(i++, urls.length - 1)],
+    close: async () => {},
   };
   const extra = {
     url: () => "https://sms.schoolsoft.se/taby/jsp/student/right_student_startpage.jsp",
@@ -32,6 +33,7 @@ function fakePw(
     pages: () => (urls[0] === "POPUP" ? [page, extra] : [page]),
   };
   const browser = {
+    contexts: () => [],
     newContext: async () => context,
     close: async () => {
       state.closed++;

@@ -37,7 +37,13 @@ async function main(): Promise<void> {
   });
   rl?.close();
   process.exitCode = code;
+  // A handle left open after the result (a CDP socket to the user's own
+  // browser) must not keep the CLI alive. Unref'd: a clean exit is not delayed.
+  setTimeout(() => process.exit(code), EXIT_GRACE_MS).unref();
 }
+
+/** How long a finished CLI run may linger on open handles before it exits. */
+const EXIT_GRACE_MS = 5000;
 
 main().catch((e) => {
   process.stderr.write(`Fatal: ${e instanceof Error ? e.message : e}\n`);

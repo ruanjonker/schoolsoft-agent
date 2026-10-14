@@ -11,6 +11,7 @@
 import type { SchoolProvider } from "../../core/provider/types.js";
 import type { Config } from "../../core/config.js";
 import { BankIdBrowserStrategy, type BankIdBrowserOptions } from "./auth/bankid-browser.js";
+import { WebSessionStrategy } from "./auth/web-session.js";
 import { ApiPortal } from "./portal/api-portal.js";
 import { BrowserPortal } from "./portal/browser-portal.js";
 import { PAGES } from "./portal/pages.js";
@@ -49,6 +50,7 @@ export const schoolsoftProvider: SchoolProvider<SchoolsoftSession> = {
       redirectUri: deps.redirectUri,
       onRefresh: deps.onRefresh,
     }),
+    new WebSessionStrategy({ fetchImpl: budgetedFetch(deps.budget, deps.fetchImpl) }),
   ],
 
   createApiPortal: (session, ctx) =>
@@ -100,6 +102,7 @@ export { LegacyApi } from "./portal/api/legacy-api.js";
 export { WebSessionApi } from "./portal/api/web-session-api.js";
 export { SchoolsoftHttp } from "./portal/api/transport.js";
 export { BankIdBrowserStrategy } from "./auth/bankid-browser.js";
+export { WebSessionStrategy, webCookieHeader } from "./auth/web-session.js";
 export { decodeJwtClaims, buildAuthUrl, exchangeCode, refreshTokens } from "./auth/oauth.js";
 export { runBrowserLogin } from "./auth/browser-flow.js";
 export { SchoolDirectory, SCHOOL_LIST_URL, parseSchoolList } from "./schools.js";
