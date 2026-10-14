@@ -22,7 +22,9 @@ const rawLessons = z.array(
     changed: z.boolean().optional(),
     isCancelled: z.boolean().optional(),
     isChanged: z.boolean().optional(),
-    status: z.string().nullish(),
+    // Live (2026-10-14, web session): a number (-1 or 2 seen), meaning not
+    // known; only a text status is read for cancellations and changes.
+    status: z.union([z.string(), z.number()]).nullish(),
   }),
 );
 
@@ -31,9 +33,9 @@ function lessonStatus(l: {
   changed?: boolean;
   isCancelled?: boolean;
   isChanged?: boolean;
-  status?: string | null;
+  status?: string | number | null;
 }): "scheduled" | "cancelled" | "changed" {
-  const text = (l.status ?? "").toLowerCase();
+  const text = typeof l.status === "string" ? l.status.toLowerCase() : "";
   if (l.cancelled === true || l.isCancelled === true || /cancel|inställd/.test(text))
     return "cancelled";
   if (l.changed === true || l.isChanged === true || /chang|ändr/.test(text)) return "changed";

@@ -305,3 +305,94 @@ test("over CDP a tab that was already on a portal page does not count as a login
     /./,
   );
 });
+
+test("restore lists the header's active children and switches the web session with the portal's PUT", async () => {
+  const puts: string[] = [];
+  const fetchImpl = async (
+    url: string,
+    _s: string,
+    o: { method?: string; headers?: Record<string, string> },
+  ) => {
+    const path = url.replace("https://sms.schoolsoft.se/testskola", "");
+    if (o.method === "PUT") {
+      puts.push(path);
+      return {
+        status: path.includes("childId=9") ? 401 : path.includes("childId=8") ? 500 : 200,
+        data: "",
+        headers: {},
+        setCookies: [],
+      };
+    }
+    return {
+      status: 200,
+      data: {
+        firstName: "F",
+        lastName: "L",
+        currentChildId: 7,
+        currentOrgId: 3,
+        children: [
+          {
+            id: 7,
+            firstName: "A",
+            lastName: "X",
+            schools: [{ orgId: 3, className: "9C", schoolName: "S", studentActive: true }],
+          },
+          {
+            id: 6,
+            firstName: "B",
+            lastName: "X",
+            schools: [{ orgId: 3, className: "6D", schoolName: "S" }],
+          },
+          { id: 5, firstName: "C", lastName: "X", schools: [{ orgId: 3, studentActive: false }] },
+          { id: 8, schools: [{ orgId: 3, className: 1 }] },
+          { id: 9, firstName: "E" },
+          { id: "x" },
+          null,
+        ],
+      },
+      headers: {},
+      setCookies: [],
+    };
+  };
+  const strategy = new WebSessionStrategy({ fetchImpl: fetchImpl as never });
+  const session = new SchoolsoftSession("testskola", fetchImpl as never);
+  await strategy.restore(session, saved());
+  assert.deepEqual(
+    strategy.context?.children.map((c) => c.studentId),
+    [7, 6, 8],
+  );
+  assert.equal(strategy.context?.parentName, "F L");
+  assert.equal(strategy.context?.children[1].schools[0].className, "6D");
+  await strategy.focusChild(session, 6);
+  assert.equal(strategy.context?.childInFocus, 6);
+  assert.deepEqual(puts, ["/rest-api/parent/header/parent?childId=6&orgId=3"]);
+  await assert.rejects(strategy.focusChild(session, 8), (e: unknown) => e instanceof UpstreamError);
+  await assert.rejects(strategy.focusChild(session, 5), /5/);
+  const noCookie = new SchoolsoftSession("testskola", fetchImpl as never);
+  await assert.rejects(strategy.focusChild(noCookie, 7), SessionExpiredError);
+});
+
+test("restore keeps the current child when the header does not list it; a 401 switch is an expired session", async () => {
+  const fetchImpl = async (_u: string, _s: string, o: { method?: string }) =>
+    o.method === "PUT"
+      ? { status: 403, data: "", headers: {}, setCookies: [] }
+      : {
+          status: 200,
+          data: {
+            currentChildId: 7,
+            currentOrgId: 3,
+            children: [{ id: 6, schools: [{ orgId: 3 }] }],
+          },
+          headers: {},
+          setCookies: [],
+        };
+  const strategy = new WebSessionStrategy({ fetchImpl: fetchImpl as never });
+  const session = new SchoolsoftSession("testskola", fetchImpl as never);
+  await strategy.restore(session, saved());
+  assert.deepEqual(
+    strategy.context?.children.map((c) => c.studentId),
+    [7, 6],
+  );
+  assert.equal(strategy.context?.parentName, "");
+  await assert.rejects(strategy.focusChild(session, 6), SessionExpiredError);
+});

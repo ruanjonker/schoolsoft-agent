@@ -134,6 +134,8 @@ test("lessons: string ids, blank text becomes null, the result satisfies the dom
   assert.equal(toLessons([{ ...rawLessonsWeek()[0], isCancelled: true }])[0].status, "cancelled");
   assert.equal(toLessons([{ ...rawLessonsWeek()[0], changed: true }])[0].status, "changed");
   assert.equal(toLessons([{ ...rawLessonsWeek()[0], status: "changed" }])[0].status, "changed");
+  // Live (web session): a numeric status, meaning unknown, is not read as a change.
+  assert.equal(toLessons([{ ...rawLessonsWeek()[0], status: 2 }])[0].status, "scheduled");
   assert.equal(toLessons([{ ...rawLessonsWeek()[0], isChanged: true }])[0].status, "changed");
   assert.throws(
     () => toLessons([{ ...rawLessonsWeek()[0], eventId: "" }]),

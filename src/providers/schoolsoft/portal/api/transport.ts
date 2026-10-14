@@ -50,6 +50,31 @@ export class SchoolsoftHttp {
     return this.unwrap<T>(r, path);
   }
 
+  /**
+   * HTML GET of a legacy JSP page with the web session's cookies. A redirect
+   * is not followed: the portal answers a dead session with one to its login
+   * page, which is reported as the session being gone.
+   */
+  async getPage(path: string, cookie: string): Promise<string> {
+    this.beforeRead?.();
+    const r = await guardNetwork(() =>
+      this.fetchImpl(
+        portalUrl(this.school, path),
+        this.school,
+        {
+          headers: { Cookie: cookie, Accept: "text/html" },
+          responseType: "text",
+          redirect: "manual",
+          signal: this.signal,
+        },
+        MOBILE_UA,
+      ),
+    );
+    if (r.status >= 300 && r.status < 400) throw new UpstreamError(401, path);
+    if (r.status !== 200) throw new UpstreamError(r.status, path);
+    return typeof r.data === "string" ? r.data : "";
+  }
+
   /** JSON POST with cookies for READ queries (legacy /rest endpoints); writes use postWrite. */
   async postJson<T>(path: string, cookie: string, body: unknown): Promise<T> {
     return this.unwrap<T>(await this.post(path, cookie, body), path);

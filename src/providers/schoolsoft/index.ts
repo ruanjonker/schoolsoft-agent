@@ -60,6 +60,7 @@ export const schoolsoftProvider: SchoolProvider<SchoolsoftSession> = {
       cookieHeader: () => session.cookieHeader(),
       beforeRead: ctx.beforeRead,
       webCookieHeader: ctx.webCookieHeader,
+      webPageCookieHeader: ctx.webPageCookieHeader,
       webChildTarget: ctx.webChildTarget,
       fetchImpl: budgetedFetch(ctx.budget, ctx.fetchImpl),
       signal: ctx.signal,

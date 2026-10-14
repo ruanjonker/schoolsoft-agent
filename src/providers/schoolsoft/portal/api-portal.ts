@@ -30,6 +30,7 @@ import { SchoolsoftHttp, type ApiFetch } from "./api/transport.js";
 import { EvaApi } from "./api/eva-api.js";
 import { WebviewApi } from "./api/webview-api.js";
 import { LegacyApi } from "./api/legacy-api.js";
+import { WebPagesApi } from "./api/web-pages-api.js";
 import { WebSessionApi, type WebChild } from "./api/web-session-api.js";
 
 export type { ApiFetch } from "./api/transport.js";
@@ -41,6 +42,8 @@ export interface GuardianApiOptions {
   cookieHeader: () => string | null;
   /** Cookies from a web login (needed for GDPR-gated REST endpoints). */
   webCookieHeader?: () => string | null;
+  /** The web session's Cookie header for one portal path (JSP pages need their own path's cookies). */
+  webPageCookieHeader?: (path: string) => string | null;
   /**
    * Which child the caller wants the WEB session focused on (normally the
    * API session's child in focus). The web session keeps its own selection,
@@ -59,6 +62,9 @@ export class ApiPortal implements ApiPortalPart {
   readonly legacy: LegacyApi;
   readonly webSession: WebSessionApi;
   readonly absence: AbsenceApi;
+  readonly pages: WebPagesApi;
+  /** No app token, only a web session: news and messages come from the JSP pages. */
+  private readonly webOnly: () => boolean;
 
   constructor(o: GuardianApiOptions) {
     const http = new SchoolsoftHttp(o.school, o.fetchImpl, o.beforeRead, o.signal);
@@ -66,6 +72,9 @@ export class ApiPortal implements ApiPortalPart {
     this.webview = new WebviewApi(http, o.cookieHeader);
     this.legacy = new LegacyApi(http, o.cookieHeader);
     this.absence = new AbsenceApi(http, o.cookieHeader);
+    const pageCookie = o.webPageCookieHeader ?? (() => null);
+    this.pages = new WebPagesApi(http, pageCookie);
+    this.webOnly = () => !o.accessToken() && pageCookie("/") !== null;
     this.webSession = new WebSessionApi(
       http,
       () => o.webCookieHeader?.() ?? null,
@@ -81,12 +90,15 @@ export class ApiPortal implements ApiPortalPart {
     return this.eva.getLunchWeek(orgId, week, year);
   }
   getNews(userId: number, orgId: number, studentId: number): Promise<unknown[]> {
+    if (this.webOnly()) return this.pages.getNews();
     return this.eva.getNews(userId, orgId, studentId);
   }
   getInbox(userId: number, orgId: number): Promise<Message[]> {
+    if (this.webOnly()) return this.pages.getInbox();
     return this.eva.getInbox(userId, orgId);
   }
   getMessage(userId: number, orgId: number, messageId: number): Promise<unknown> {
+    if (this.webOnly()) return this.pages.getMessage(messageId);
     return this.eva.getMessage(userId, orgId, messageId);
   }
   getNextCalendarEvent(userId: number, orgId: number, studentId: number): Promise<unknown> {

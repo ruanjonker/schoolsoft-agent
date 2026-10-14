@@ -24,9 +24,53 @@ import type { SchoolsoftSession } from "../session.js";
 const HEADER_PATH = "/rest-api/parent/header/parent";
 
 /** The parts of the portal header this strategy reads; anything else is ignored. */
+interface HeaderSchool {
+  orgId?: unknown;
+  className?: unknown;
+  schoolName?: unknown;
+  studentActive?: unknown;
+}
+interface HeaderChild {
+  id?: unknown;
+  firstName?: unknown;
+  lastName?: unknown;
+  schools?: HeaderSchool[];
+}
 interface Header {
+  firstName?: unknown;
+  lastName?: unknown;
+  children?: HeaderChild[];
   currentChildId?: unknown;
   currentOrgId?: unknown;
+}
+
+const text = (v: unknown): string => (typeof v === "string" ? v : "");
+
+/**
+ * The header's children (live 2026-10-14: `id`, names, `schools` with
+ * `orgId`, `className`, `schoolName`, `studentActive`). A child whose every
+ * school says `studentActive: false` (a former pupil) is left out.
+ */
+function childrenOf(header: Header): GuardianChild[] {
+  const out: GuardianChild[] = [];
+  for (const c of Array.isArray(header.children) ? header.children : []) {
+    if (typeof c?.id !== "number") continue;
+    const schools = (Array.isArray(c.schools) ? c.schools : [])
+      .filter((s) => typeof s?.orgId === "number" && s.studentActive !== false)
+      .map((s) => ({
+        orgId: s.orgId as number,
+        name: text(s.schoolName),
+        className: text(s.className),
+      }));
+    if (schools.length === 0) continue;
+    out.push({
+      studentId: c.id,
+      firstName: text(c.firstName),
+      lastName: text(c.lastName),
+      schools,
+    });
+  }
+  return out;
 }
 
 export interface WebSessionOptions {
@@ -79,12 +123,17 @@ export class WebSessionStrategy implements AuthStrategy<SchoolsoftSession> {
       if (e instanceof UpstreamError && e.sessionRejected) throw new SessionExpiredError();
       throw e;
     }
-    const child = oneChild(header ?? {});
+    const h = header ?? {};
+    const current = oneChild(h);
+    const listed = childrenOf(h);
+    const children = listed.some((c) => c.studentId === current.studentId)
+      ? listed
+      : [current, ...listed];
     this.context = {
       userId: 0,
-      parentName: "",
-      children: [child],
-      childInFocus: child.studentId,
+      parentName: `${text(h.firstName)} ${text(h.lastName)}`.trim(),
+      children,
+      childInFocus: current.studentId,
     };
   }
 
@@ -94,8 +143,11 @@ export class WebSessionStrategy implements AuthStrategy<SchoolsoftSession> {
     return { expiresAt: null };
   }
 
-  /** Only the child the web session shows is known; switching is done in the portal itself. */
-  async focusChild(_session: SchoolsoftSession, studentId: number): Promise<void> {
+  /**
+   * Switch the web session to another child: the same PUT the portal's own
+   * child menu sends. It changes only which child the session shows.
+   */
+  async focusChild(session: SchoolsoftSession, studentId: number): Promise<void> {
     await Promise.resolve();
     if (!this.context)
       throw new AgentError({
@@ -104,6 +156,17 @@ export class WebSessionStrategy implements AuthStrategy<SchoolsoftSession> {
         params: { reason: "no guardian context yet" },
         hint: "login",
       });
-    childOf(this.context, studentId); // validates: throws for any other child
+    const child = childOf(this.context, studentId); // validates: throws for any other child
+    const cookie = session.cookieHeader();
+    if (!cookie) throw new SessionExpiredError();
+    const path = `${HEADER_PATH}?childId=${child.studentId}&orgId=${child.schools[0].orgId}`;
+    const status = await new SchoolsoftHttp(session.school, this.options.fetchImpl).put(
+      path,
+      cookie,
+    );
+    if (status === 401 || status === 403) throw new SessionExpiredError();
+    if (status < 200 || status >= 300)
+      throw new UpstreamError(status, `selecting child ${child.studentId} in the web session`);
+    this.context = { ...this.context, childInFocus: child.studentId };
   }
 }

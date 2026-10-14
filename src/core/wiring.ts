@@ -285,6 +285,10 @@ function apiContext(
       const w = manager.getWebSession();
       return w ? cookieHeaderFor(w.cookies, manager.school, "/rest-api/") : null;
     },
+    webPageCookieHeader: (path) => {
+      const w = manager.getWebSession();
+      return w ? cookieHeaderFor(w.cookies, manager.school, path) : null;
+    },
     webChildTarget: () => {
       try {
         const g = manager.guardian();
