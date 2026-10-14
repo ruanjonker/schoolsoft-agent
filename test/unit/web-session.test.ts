@@ -170,7 +170,8 @@ function cdpPw(o: { hangClose?: boolean; contexts?: number; noPage?: boolean }) 
       return page;
     },
     cookies: async () => [
-      { name: "JSESSIONID", value: "w", domain: "sms.schoolsoft.se", path: "/", expires: -1 },
+      { name: "JSESSIONID", value: "w", domain: "sms.schoolsoft.se", path: "/taby", expires: -1 },
+      { name: "JSESSIONID", value: "o", domain: "sms.schoolsoft.se", path: "/other", expires: -1 },
     ],
     pages: () => [page],
   };
@@ -204,7 +205,8 @@ test("over CDP the web login reuses the browser's own profile and closes only it
     loader: async () => pw,
     pollMs: 1,
   });
-  assert.equal(web.cookies.length, 1);
+  assert.equal(web.cookies.length, 1, "another tenant's session cookie is not kept");
+  assert.equal(web.cookies[0].path, "/taby");
   assert.equal(state.newContexts, 0, "the default context, not a fresh one");
   assert.equal(state.pageClosed, 1);
   assert.equal(state.browserClosed, 1, "disconnects");
@@ -238,4 +240,68 @@ test("over CDP a tab that never opened still disconnects", async () => {
   );
   assert.equal(state.pageClosed, 0);
   assert.equal(state.browserClosed, 1);
+});
+
+test("cookieHeaderFor sends only the cookies whose path covers the tenant request", async () => {
+  const { cookieHeaderFor, cookiePathMatches } =
+    await import("../../src/core/browser/web-login.js");
+  const c = (name: string, path: string) => ({
+    name,
+    value: "v",
+    domain: "sms.schoolsoft.se",
+    path,
+  });
+  const jar = [
+    c("usertype", "/a/jsp"),
+    c("usertype", "/b/jsp"),
+    c("hash", "/a/"),
+    c("JSESSIONID", "/a"),
+    c("hash", "/b/"),
+    c("JSESSIONID", "/b"),
+    c("fav", "/"),
+  ];
+  assert.equal(cookieHeaderFor(jar, "a", "/rest-api/"), "hash=v; JSESSIONID=v; fav=v");
+  assert.equal(cookieHeaderFor(jar, "a", "/jsp/x.jsp"), "usertype=v; hash=v; JSESSIONID=v; fav=v");
+  assert.equal(cookieHeaderFor([c("JSESSIONID", "/ab")], "a", "/rest-api/"), null);
+  assert.equal(cookieHeaderFor([{ ...c("x", ""), path: "" }], "a", "/r"), "x=v");
+  assert.ok(cookiePathMatches("/a", "/a"));
+  assert.ok(!cookiePathMatches("/a", "/abc"));
+});
+
+test("over CDP a tab that was already on a portal page does not count as a login", async () => {
+  const stale = {
+    url: () => "https://sms.schoolsoft.se/taby/jsp/student/right_student_startpage.jsp",
+  };
+  const mine = {
+    goto: async () => {},
+    url: () => "https://sms.schoolsoft.se/taby/jsp/Login.jsp",
+    close: async () => {},
+  };
+  let opened = false;
+  const context = {
+    newPage: async () => ((opened = true), mine),
+    cookies: async () => [
+      { name: "JSESSIONID", value: "w", domain: "sms.schoolsoft.se", path: "/taby", expires: -1 },
+    ],
+    pages: () => (opened ? [stale, mine] : [stale]),
+  };
+  const browser = { contexts: () => [context], close: async () => {} };
+  const pw = {
+    chromium: {
+      launch: async () => browser,
+      executablePath: () => "",
+      connectOverCDP: async () => browser,
+    },
+  } as unknown as PlaywrightLike;
+  await assert.rejects(
+    webLogin({
+      school: "taby",
+      spec: webLoginSpec,
+      engine: { kind: "cdp", endpoint: "http://127.0.0.1:9227" },
+      loader: async () => pw,
+      pollMs: 1,
+      timeoutMs: 20,
+    }),
+    /./,
+  );
 });

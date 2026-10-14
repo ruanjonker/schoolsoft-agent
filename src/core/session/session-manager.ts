@@ -76,7 +76,7 @@ export interface SessionManagerOptions<S extends ProviderSession> {
 }
 
 export class SessionManager<S extends ProviderSession = ProviderSession> {
-  private readonly school: string;
+  readonly school: string;
   readonly providerId: string;
   private readonly store: SessionStore;
   private readonly strategies: Map<string, AuthStrategy<S>>;

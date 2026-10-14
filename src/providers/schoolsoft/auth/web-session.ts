@@ -14,6 +14,7 @@ import type { AuthStrategy, LoginInfo } from "../../../core/auth/strategy.js";
 import type { PersistedSession } from "../../../core/session/store.js";
 import type { GuardianContext } from "../../../core/portal/guardian.js";
 import type { GuardianChild } from "../../../core/portal/types.js";
+import { cookieHeaderFor } from "../../../core/browser/web-login.js";
 import { childOf } from "../../../core/portal/guardian.js";
 import { WEB_SESSION_METHOD } from "../../../core/session/session-manager.js";
 import { AgentError, SessionExpiredError, UpstreamError } from "../../../core/errors/index.js";
@@ -35,9 +36,7 @@ export interface WebSessionOptions {
 
 /** The portal cookies of a saved web login as one Cookie header, or null. */
 export function webCookieHeader(saved: PersistedSession): string | null {
-  const cookies = saved.web?.cookies ?? [];
-  if (cookies.length === 0) return null;
-  return cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+  return cookieHeaderFor(saved.web?.cookies ?? [], saved.school, "/rest-api/");
 }
 
 function oneChild(header: Header): GuardianChild {

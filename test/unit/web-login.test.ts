@@ -27,10 +27,14 @@ function fakePw(
   const extra = {
     url: () => "https://sms.schoolsoft.se/taby/jsp/student/right_student_startpage.jsp",
   };
+  let opened = false;
   const context = {
-    newPage: async () => page,
+    newPage: async () => {
+      opened = true;
+      return page;
+    },
     cookies: async () => cookies,
-    pages: () => (urls[0] === "POPUP" ? [page, extra] : [page]),
+    pages: () => (!opened ? [] : urls[0] === "POPUP" ? [page, extra] : [page]),
   };
   const browser = {
     contexts: () => [],
