@@ -24,7 +24,7 @@ import { SessionLostError, type Portal } from "./portal/types.js";
 import { childOf, orgIdOf } from "./portal/guardian.js";
 import type { BrowserEngine } from "./browser/session.js";
 import { PlaywrightSession, type PlaywrightLoader } from "./browser/playwright.js";
-import { webLogin, type WebSession } from "./browser/web-login.js";
+import { cookieHeaderFor, webLogin, type WebSession } from "./browser/web-login.js";
 import { defaultOpenInBrowser } from "./auth/open-browser.js";
 import { FilePendingLoginStore, type PendingLoginStore } from "./session/pending-login.js";
 import type { ApiPortalContext, BrowserAuthorization, SchoolProvider } from "./provider/types.js";
@@ -283,7 +283,11 @@ function apiContext(
     signal: deps.signal,
     webCookieHeader: () => {
       const w = manager.getWebSession();
-      return w ? w.cookies.map((c) => `${c.name}=${c.value}`).join("; ") : null;
+      return w ? cookieHeaderFor(w.cookies, manager.school, "/rest-api/") : null;
+    },
+    webPageCookieHeader: (path) => {
+      const w = manager.getWebSession();
+      return w ? cookieHeaderFor(w.cookies, manager.school, path) : null;
     },
     webChildTarget: () => {
       try {

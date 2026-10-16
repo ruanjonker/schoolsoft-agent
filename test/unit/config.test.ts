@@ -191,8 +191,26 @@ test("createPortal injects the web-login cookies into the browser session for ga
     "the web cookies, not the app cookie header, reach the browser for a gated page",
   );
   injected.length = 0;
-  await assert.rejects(portal.getContacts(), /Not logged in/);
+  // The lone web login is a web-only session now: a non-gated read restores from it.
+  await assert.rejects(portal.getContacts(), /Could not reach SchoolSoft/);
+  // News from a web-only session goes to the JSP page with that page's cookies.
+  await assert.rejects(portal.getNews(0, 1, 2), /Could not reach SchoolSoft/);
   assert.deepEqual(injected, [], "a non-gated page never gets the web cookies");
+});
+
+test("createPortal without a web session: news stays on the app API", async () => {
+  const { createSessionManager, createPortal } = await import("../../src/core/wiring.js");
+  const { MemorySessionStore } = await import("../../src/core/session/store.js");
+  const config = resolveConfig([{ school: "taby", configDir: "/nowhere" }], defaults);
+  const offline = async () => {
+    throw new Error("no network in tests");
+  };
+  const manager = createSessionManager(config, {
+    store: new MemorySessionStore(),
+    fetchImpl: offline,
+  });
+  const portal = createPortal(manager, { fetchImpl: offline });
+  await assert.rejects(portal.getNews(0, 1, 2), /Not logged in/);
 });
 
 test("defaultConfigDir on win32 and linux honours APPDATA / XDG_CONFIG_HOME", async () => {
@@ -215,6 +233,7 @@ test("createSessionManager defaults: file store in stateDir, web login runs a he
   const page = {
     goto: async () => {},
     url: () => "https://sms.schoolsoft.se/taby/jsp/student/right_student_startpage.jsp",
+    close: async () => {},
   };
   const context = {
     newPage: async () => page,
@@ -223,7 +242,7 @@ test("createSessionManager defaults: file store in stateDir, web login runs a he
       { name: "JSESSIONID", value: "w", domain: "sms.schoolsoft.se", path: "/", expires: -1 },
     ],
   };
-  const browser = { newContext: async () => context, close: async () => {} };
+  const browser = { contexts: () => [], newContext: async () => context, close: async () => {} };
   const loader = async () =>
     ({
       chromium: {

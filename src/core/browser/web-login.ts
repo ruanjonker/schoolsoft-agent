@@ -58,6 +58,31 @@ export function cookieDomainCovers(cookieDomain: string, host: string): boolean 
   return name === domain || name.endsWith(`.${domain}`);
 }
 
+/** RFC 6265 path-match: does a cookie with `cookiePath` go with a request to `requestPath`? */
+export function cookiePathMatches(cookiePath: string, requestPath: string): boolean {
+  if (cookiePath === requestPath) return true;
+  if (!requestPath.startsWith(cookiePath)) return false;
+  return cookiePath.endsWith("/") || requestPath[cookiePath.length] === "/";
+}
+
+/**
+ * The Cookie header a browser would send to `path` on one tenant: only the
+ * cookies whose path covers `/<school><path>`. A guardian with children on
+ * several tenants holds a JSESSIONID and a hash per tenant; sending them all
+ * puts another tenant's session first and the portal rejects the request.
+ */
+export function cookieHeaderFor(cookies: WebCookie[], school: string, path: string): string | null {
+  const target = `/${school}${path}`;
+  const sent = cookies.filter((c) => cookiePathMatches(c.path || "/", target));
+  return sent.length ? sent.map((c) => `${c.name}=${c.value}`).join("; ") : null;
+}
+
+/** Cookies that belong to one tenant (or the whole host), not to another tenant's path. */
+function tenantCookie(c: { path: string }, school: string): boolean {
+  const p = c.path;
+  return cookiePathMatches(p, `/${school}/`) || p.startsWith(`/${school}/`);
+}
+
 export async function webLogin(o: WebLoginOptions): Promise<WebSession> {
   const origin = o.spec.origin;
   /* c8 ignore next: real playwright default, exercised by make login-web */
@@ -70,9 +95,20 @@ export async function webLogin(o: WebLoginOptions): Promise<WebSession> {
     engine.kind === "cdp"
       ? await pw.chromium.connectOverCDP(engine.endpoint)
       : await pw.chromium.launch({ headless: false });
+  const cdp = engine.kind === "cdp";
+  let opened: { close(): Promise<void> } | null = null;
   try {
-    const context = await browser.newContext({ locale: "sv-SE" });
+    // Over CDP, reuse the real browser's own profile: SchoolSoft's BankID
+    // flow does not complete in a fresh incognito-style context.
+    const context =
+      cdp && browser.contexts().length > 0
+        ? browser.contexts()[0]!
+        : await browser.newContext({ locale: "sv-SE" });
+    // Tabs that were already open (the user's own, over CDP) may still show a
+    // portal URL after their session ended; only tabs this login opened count.
+    const before = new Set(context.pages());
     const page = await context.newPage();
+    opened = page;
     const loginUrl = o.spec.loginUrl(o.school);
     o.onOpen?.(loginUrl);
     await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
@@ -82,11 +118,14 @@ export async function webLogin(o: WebLoginOptions): Promise<WebSession> {
       const url =
         context
           .pages()
+          .filter((p) => !before.has(p))
           .map((p) => p.url())
           .find((u) => o.spec.isPortalUrl(u, o.school)) ?? page.url();
       if (o.spec.isPortalUrl(url, o.school)) {
         const host = new URL(origin).hostname;
-        const cookies = (await context.cookies()).filter((c) => cookieDomainCovers(c.domain, host));
+        const cookies = (await context.cookies()).filter(
+          (c) => cookieDomainCovers(c.domain, host) && tenantCookie(c, o.school),
+        );
         if (cookies.length > 0) {
           return {
             cookies: cookies.map((c) => ({
@@ -112,6 +151,30 @@ export async function webLogin(o: WebLoginOptions): Promise<WebSession> {
       hint: "login_web",
     });
   } finally {
-    await browser.close().catch(() => {});
+    if (cdp) {
+      // The user's own browser: close only the tab we opened, then disconnect.
+      // Never wait on the disconnect for long; a stuck CDP socket must not
+      // hold the process after the result is known.
+      await settle(opened?.close(), CDP_RELEASE_MS);
+      await settle(browser.close(), CDP_RELEASE_MS);
+    } else {
+      await browser.close().catch(() => {});
+    }
   }
+}
+
+/** How long to wait for the CDP tab close and disconnect before moving on. */
+export const CDP_RELEASE_MS = 3000;
+
+/** Wait for `p` at most `ms`; errors and timeouts are both ignored. */
+async function settle(p: Promise<unknown> | undefined, ms: number): Promise<void> {
+  if (!p) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    p.catch(() => {}),
+    new Promise<void>((r) => {
+      timer = setTimeout(r, ms);
+    }),
+  ]);
+  clearTimeout(timer);
 }

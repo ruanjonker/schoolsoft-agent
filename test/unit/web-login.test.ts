@@ -22,16 +22,22 @@ function fakePw(
       state.gotos.push(u);
     },
     url: () => urls[Math.min(i++, urls.length - 1)],
+    close: async () => {},
   };
   const extra = {
     url: () => "https://sms.schoolsoft.se/taby/jsp/student/right_student_startpage.jsp",
   };
+  let opened = false;
   const context = {
-    newPage: async () => page,
+    newPage: async () => {
+      opened = true;
+      return page;
+    },
     cookies: async () => cookies,
-    pages: () => (urls[0] === "POPUP" ? [page, extra] : [page]),
+    pages: () => (!opened ? [] : urls[0] === "POPUP" ? [page, extra] : [page]),
   };
   const browser = {
+    contexts: () => [],
     newContext: async () => context,
     close: async () => {
       state.closed++;

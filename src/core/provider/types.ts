@@ -72,6 +72,8 @@ export interface ApiPortalContext {
   beforeRead?: () => void;
   /** Cookies from the web login, as a header, null without a web session. */
   webCookieHeader: () => string | null;
+  /** The web session's Cookie header for one portal path, as a browser would send it. */
+  webPageCookieHeader?: (path: string) => string | null;
   /** Which child the caller wants the WEB session on; null = leave it. */
   webChildTarget: () => { childId: number; orgId: number } | null;
   /** Injected HTTP for tests (still wrapped in the budget); the provider's default otherwise. */

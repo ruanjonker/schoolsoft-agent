@@ -33,6 +33,13 @@ export class NotAuthenticatedError extends AgentError {
   }
 }
 
+/**
+ * `authMethod` of a session that holds only web-login cookies (no app
+ * token). The provider registers a strategy with this id that restores
+ * from the cookies; without one, such a session is never restored.
+ */
+export const WEB_SESSION_METHOD = "web-session";
+
 /** Refresh this long before the access credential expires (keepalive). */
 export const RENEW_LEAD_MS = 3 * 60_000;
 
@@ -69,7 +76,7 @@ export interface SessionManagerOptions<S extends ProviderSession> {
 }
 
 export class SessionManager<S extends ProviderSession = ProviderSession> {
-  private readonly school: string;
+  readonly school: string;
   readonly providerId: string;
   private readonly store: SessionStore;
   private readonly strategies: Map<string, AuthStrategy<S>>;
@@ -450,6 +457,18 @@ export class SessionManager<S extends ProviderSession = ProviderSession> {
     this.web = web;
     const saved = this.store.load();
     if (saved) this.store.save({ ...saved, web });
+    else if (this.strategies.has(WEB_SESSION_METHOD)) {
+      // No app session yet: the web cookies stand on their own.
+      this.store.save({
+        provider: this.providerId,
+        school: this.school,
+        data: {},
+        web,
+        savedAt: this.now(),
+        authMethod: WEB_SESSION_METHOD,
+      });
+      this.reset();
+    }
     this.emit({ type: "web_login", since: web.savedAt });
     return { status: "web_logged_in", landedOn: web.landedOn, cookies: web.cookies.length };
   }
@@ -458,7 +477,10 @@ export class SessionManager<S extends ProviderSession = ProviderSession> {
   clearWebSession(): void {
     this.web = null;
     const saved = this.store.load();
-    if (saved) this.store.save({ ...saved, web: undefined });
+    if (saved?.authMethod === WEB_SESSION_METHOD) {
+      this.store.clear();
+      this.reset();
+    } else if (saved) this.store.save({ ...saved, web: undefined });
   }
 
   logout(): void {
